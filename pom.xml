@@ -87,13 +87,6 @@
             <version>4.0.0</version>
         </dependency>
 
-        <!-- 🔗 DOMAIN COMO LIB -->
-        <dependency>
-            <groupId>br.com.bipos</groupId>
-            <artifactId>bipos-domain</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-
         <!-- TESTES -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
