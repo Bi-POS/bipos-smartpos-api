@@ -38,10 +38,8 @@ class PosJwtAuthenticationFilter(
             val companyId = jwtService.extractCompanyId(token)
             val type = jwtService.extractType(token)
 
-
             if (type != "POS" || jwtService.isTokenExpired(token)) {
                 SecurityContextHolder.clearContext()
-                filterChain.doFilter(request, response)
                 return
             }
 
@@ -55,12 +53,10 @@ class PosJwtAuthenticationFilter(
 
         } catch (ex: Exception) {
             SecurityContextHolder.clearContext()
-            response.status = HttpServletResponse.SC_UNAUTHORIZED
+            filterChain.doFilter(request, response)
             return
         }
 
         filterChain.doFilter(request, response)
     }
-
 }
-
