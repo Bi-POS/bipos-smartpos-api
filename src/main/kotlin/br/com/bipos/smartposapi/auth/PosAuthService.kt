@@ -56,7 +56,8 @@ class PosAuthService(
             companyId = credential.company.id.toString(),
             companyName = credential.company.name,
             serialNumber = credential.serialNumber,
-            posVersion = credential.posVersion
+            posVersion = credential.posVersion,
+            companyLogoUrl = credential.company.logoUrl
         )
     }
 

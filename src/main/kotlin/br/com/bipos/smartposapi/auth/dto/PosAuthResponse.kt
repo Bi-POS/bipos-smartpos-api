@@ -6,5 +6,6 @@ data class PosAuthResponse(
     val companyId: String,
     val companyName: String?,
     val serialNumber: String?,
-    val posVersion: String?
+    val posVersion: String?,
+    val companyLogoUrl: String?
 )
