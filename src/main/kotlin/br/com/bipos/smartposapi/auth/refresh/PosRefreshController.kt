@@ -39,6 +39,7 @@ class PosRefreshController(
             companyName = credential.company.name,
             serialNumber = credential.serialNumber,
             posVersion = credential.posVersion,
+            companyLogoUrl = credential.company.logoUrl
         )
     }
 }
