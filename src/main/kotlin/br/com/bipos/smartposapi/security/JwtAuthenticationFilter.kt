@@ -27,7 +27,7 @@ class PosJwtAuthenticationFilter(
 
         val authHeader = request.getHeader("Authorization")
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader.isNullOrBlank() || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response)
             return
         }
@@ -40,6 +40,7 @@ class PosJwtAuthenticationFilter(
 
             if (type != "POS" || jwtService.isTokenExpired(token)) {
                 SecurityContextHolder.clearContext()
+                filterChain.doFilter(request, response)
                 return
             }
 
@@ -60,3 +61,4 @@ class PosJwtAuthenticationFilter(
         filterChain.doFilter(request, response)
     }
 }
+
