@@ -34,13 +34,20 @@ class PosAuthService(
             loginFailed(httpRequest)
         }
 
+        /* 🔐 VALIDA COMPANY ANTES DE QUALQUER USO */
+        val company = credential.company
+            ?: throw IllegalStateException("POS Credential sem company vinculada")
+
+        val companyId = company.id
+            ?: throw IllegalStateException("Company sem ID")
+
         /* Atualiza dados do POS */
         credential.serialNumber = request.serialNumber
         credential.posVersion = request.posVersion
         repository.save(credential)
 
         auditService.log(
-            companyId = credential.company.id,
+            companyId = companyId,
             action = AuditAction.LOGIN_SUCCESS.name,
             request = httpRequest,
             serialNumber = credential.serialNumber,
@@ -49,11 +56,9 @@ class PosAuthService(
 
         val token = jwtService.generateToken(credential)
 
-        val company = credential.company
-
         // 🔥 USER VISUAL (OWNER)
         val owner = userRepository.findFirstByCompanyIdAndRoleAndActiveTrue(
-            company.id!!,
+            companyId,
             UserRole.OWNER
         )
 
@@ -61,7 +66,7 @@ class PosAuthService(
             token = token,
 
             company = CompanySnapshot(
-                id = company.id.toString(),
+                id = companyId.toString(),
                 name = company.name,
                 cnpj = company.document,
                 logoPath = company.logoUrl
@@ -69,7 +74,7 @@ class PosAuthService(
 
             user = UserSnapshot(
                 id = owner?.id?.toString(),
-                name = owner?.name ?: company.name,          // fallback elegante
+                name = owner?.name ?: company.name,
                 photoPath = owner?.photoUrl
             ),
 
@@ -89,3 +94,4 @@ class PosAuthService(
         throw InvalidPosCredentialsException()
     }
 }
+
