@@ -65,8 +65,8 @@ class PosJwtService(
     // CLAIMS
     // ===============================
 
-    fun extractCompanyId(token: String): String =
-        extractAllClaims(token)["companyId"] as String
+    fun extractCompanyId(token: String): UUID =
+        UUID.fromString(extractAllClaims(token)["companyId"] as String)
 
     fun extractType(token: String): String =
         extractAllClaims(token)["type"] as String
