@@ -9,6 +9,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import java.util.*
 
 @Component
 class PosJwtAuthenticationFilter(
@@ -37,6 +38,14 @@ class PosJwtAuthenticationFilter(
             val companyId = jwtService.extractCompanyId(token)
             val type = jwtService.extractType(token)
 
+            val companyIdUuid = try {
+                UUID.fromString(companyId)
+            } catch (e: IllegalArgumentException) {
+                SecurityContextHolder.clearContext()
+                filterChain.doFilter(request, response)
+                return
+            }
+
             if (type != "POS" || jwtService.isTokenExpired(token)) {
                 SecurityContextHolder.clearContext()
                 filterChain.doFilter(request, response)
@@ -44,7 +53,7 @@ class PosJwtAuthenticationFilter(
             }
 
             val principal = PosPrincipal(
-                companyId = companyId,
+                companyId = companyIdUuid,
                 tokenType = type,
             )
 
