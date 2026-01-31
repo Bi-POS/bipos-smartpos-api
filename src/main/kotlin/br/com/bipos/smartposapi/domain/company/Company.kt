@@ -18,7 +18,10 @@ data class Company(
 
     @Column(nullable = false, unique = true) @Email(message = "E-mail inválido.") var email: String = "",
 
-    @Column(nullable = false, unique = true, length = 20) @Pattern(regexp = "^[0-9A-Za-z]+$", message = "O CNPJ deve conter apenas caracteres alfanuméricos.") var document: String = "",
+    @Column(nullable = false, unique = true, length = 20) @Pattern(
+        regexp = "^[0-9A-Za-z]+$",
+        message = "O CNPJ deve conter apenas caracteres alfanuméricos."
+    ) var document: String = "",
 
     @Enumerated(EnumType.STRING) @Column(nullable = false) var documentType: DocumentType = DocumentType.CNPJ,
 
@@ -29,6 +32,9 @@ data class Company(
 
     @Column(nullable = true)
     var logoUrl: String? = null,
+
+    @Column(nullable = false)
+    var stockEnabled: Boolean = true,
 
     @OneToMany(
         mappedBy = "company",

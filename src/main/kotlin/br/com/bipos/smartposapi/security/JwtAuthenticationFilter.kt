@@ -24,7 +24,6 @@ class PosJwtAuthenticationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
-
         val authHeader = request.getHeader("Authorization")
 
         if (authHeader.isNullOrBlank() || !authHeader.startsWith("Bearer ")) {
@@ -44,8 +43,13 @@ class PosJwtAuthenticationFilter(
                 return
             }
 
+            val principal = PosPrincipal(
+                companyId = companyId,
+                tokenType = type,
+            )
+
             val authentication = UsernamePasswordAuthenticationToken(
-                companyId,
+                principal,
                 null,
                 listOf(SimpleGrantedAuthority("ROLE_POS"))
             )
@@ -54,8 +58,6 @@ class PosJwtAuthenticationFilter(
 
         } catch (ex: Exception) {
             SecurityContextHolder.clearContext()
-            filterChain.doFilter(request, response)
-            return
         }
 
         filterChain.doFilter(request, response)
