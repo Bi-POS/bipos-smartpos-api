@@ -2,10 +2,26 @@ package br.com.bipos.smartposapi.auth.dto
 
 data class PosAuthResponse(
     val token: String,
+
+    val company: CompanySnapshot,
+    val user: UserSnapshot,
+    val pos: PosSnapshot
+)
+
+data class CompanySnapshot(
+    val id: String,
+    val name: String,
     val cnpj: String,
-    val companyId: String,
-    val companyName: String?,
+    val logoPath: String?
+)
+
+data class UserSnapshot(
+    val id: String?,
+    val name: String,
+    val photoPath: String?
+)
+
+data class PosSnapshot(
     val serialNumber: String?,
-    val posVersion: String?,
-    val companyLogoUrl: String?
+    val version: String?
 )

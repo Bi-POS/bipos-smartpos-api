@@ -1,5 +1,6 @@
 package br.com.bipos.smartposapi.auth.refresh
 
+import br.com.bipos.smartposapi.BASE_URL
 import br.com.bipos.smartposapi.auth.PosJwtService
 import br.com.bipos.smartposapi.auth.dto.PosAuthResponse
 import br.com.bipos.smartposapi.auth.refresh.dto.RefreshRequest
@@ -39,7 +40,7 @@ class PosRefreshController(
             companyName = credential.company.name,
             serialNumber = credential.serialNumber,
             posVersion = credential.posVersion,
-            companyLogoUrl = credential.company.logoUrl
+            companyLogoUrl = "$BASE_URL/${credential.company.logoUrl}"
         )
     }
 }
