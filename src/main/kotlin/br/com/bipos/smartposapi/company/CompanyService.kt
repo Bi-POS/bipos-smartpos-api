@@ -4,12 +4,13 @@ import br.com.bipos.smartposapi.domain.company.Company
 import br.com.bipos.smartposapi.security.PosPrincipal
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
+import java.util.UUID
 
 @Service
 class CompanyService(
     private val companyRepository: CompanyRepository
 ) {
-    fun findById(id: String): Company {
+    fun findById(id: UUID?): Company {
         return companyRepository.findById(id)
             .orElseThrow { IllegalArgumentException("Empresa não encontrada") }
     }
