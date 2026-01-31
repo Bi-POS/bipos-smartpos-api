@@ -14,14 +14,25 @@ class StockService(
     private val companyService: CompanyService
 ) {
 
+    /** =========================
+     *  Flag global da empresa
+     *  ========================= */
+    fun isStockEnabled(): Boolean {
+        return companyService.getCurrentCompany().stockEnabled
+    }
+
+    /** =========================
+     *  Baixa segura (não bloqueia venda)
+     *  ========================= */
     @Transactional
-    fun decreaseStock(
+    fun decreaseStockIfExists(
         product: Product,
         quantity: Int,
         referenceId: UUID
     ) {
         val company = companyService.getCurrentCompany()
 
+        // 🔕 Empresa não controla estoque
         if (!company.stockEnabled) {
             return
         }
@@ -29,14 +40,15 @@ class StockService(
         val stock = stockRepository.findByCompany_IdAndProduct_Id(
             company.id!!,
             product.id!!
-        ) ?: throw RuntimeException("Estoque não encontrado")
+        ) ?: return // 🔥 produto sem estoque → ignora
 
+        // 🔕 Estoque insuficiente → não bloqueia venda
         if (stock.quantity < quantity) {
-            throw RuntimeException("Estoque insuficiente")
+            // opcional: log
+            return
         }
 
         stock.quantity -= quantity
-
         stockRepository.save(stock)
 
         stockMovementRepository.save(
@@ -51,6 +63,9 @@ class StockService(
         )
     }
 
+    /** =========================
+     *  Entrada de estoque (WEB)
+     *  ========================= */
     @Transactional
     fun increaseStock(
         product: Product,
@@ -69,7 +84,6 @@ class StockService(
         )
 
         stock.quantity += quantity
-
         stockRepository.save(stock)
 
         stockMovementRepository.save(

@@ -23,8 +23,7 @@ class SaleItem(
     val product: Product,
 
     val quantity: Int,
-
     val unitPrice: BigDecimal,
-
     val subtotal: BigDecimal
 )
+

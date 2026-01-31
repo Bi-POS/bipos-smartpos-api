@@ -15,7 +15,7 @@ class Payment(
     @GeneratedValue
     val id: UUID? = null,
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sale_id", nullable = false)
     val sale: Sale,
 

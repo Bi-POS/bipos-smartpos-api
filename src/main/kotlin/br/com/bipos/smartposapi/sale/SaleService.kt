@@ -4,7 +4,7 @@ import br.com.bipos.smartposapi.company.CompanyService
 import br.com.bipos.smartposapi.domain.catalog.Payment
 import br.com.bipos.smartposapi.domain.catalog.Sale
 import br.com.bipos.smartposapi.domain.catalog.SaleItem
-import br.com.bipos.smartposapi.payment.PaymentRepository
+import br.com.bipos.smartposapi.payment.PaymentStatus
 import br.com.bipos.smartposapi.sale.dto.SaleRequest
 import br.com.bipos.smartposapi.sale.product.PosSaleProductRepository
 import br.com.bipos.smartposapi.stock.StockService
@@ -16,61 +16,106 @@ import java.math.BigDecimal
 class SaleService(
     private val productRepository: PosSaleProductRepository,
     private val saleRepository: SaleRepository,
-    private val paymentRepository: PaymentRepository,
-    companyService: CompanyService,
+    private val companyService: CompanyService,
     private val stockService: StockService
 ) {
-    val company = companyService.getCurrentCompany()
 
     @Transactional
-    fun createSale(request: SaleRequest): Sale {
+    fun createSale(
+        companyId: String,
+        request: SaleRequest
+    ): Sale {
 
+        if (request.items.isEmpty()) {
+            throw IllegalArgumentException("Venda sem itens")
+        }
+
+        /* =========================
+           Buscar Company
+           ========================= */
+        val company = companyService.findById(companyId)
+            ?: throw IllegalArgumentException("Empresa não encontrada")
+
+        /* =========================
+           Buscar produtos
+           ========================= */
+        val productIds = request.items.map { it.productId }
+
+        val products = productRepository
+            .findAllById(productIds)
+            .associateBy { it.id }
+
+        if (products.size != productIds.distinct().size) {
+            throw IllegalArgumentException("Produto inválido na venda")
+        }
+
+        /* =========================
+           Criar SALE
+           ========================= */
         val sale = Sale(
             company = company,
             totalAmount = BigDecimal.ZERO
         )
 
-        var total = BigDecimal.ZERO
+        sale.status = SaleStatus.CREATED
 
-        request.items.forEach { item ->
+        /* =========================
+           Criar itens da venda
+           ========================= */
+        request.items.forEach { itemReq ->
 
-            val product = productRepository.findById(item.productId)
-                .orElseThrow { RuntimeException("Produto não encontrado") }
+            val product = products[itemReq.productId]
+                ?: throw IllegalArgumentException("Produto não encontrado")
 
-            val subtotal = product.price.multiply(item.quantity.toBigDecimal())
+            val quantity = itemReq.quantity.takeIf { it > 0 }
+                ?: throw IllegalArgumentException("Quantidade inválida")
 
-            val saleItem = SaleItem(
-                sale = sale,
-                product = product,
-                quantity = item.quantity,
-                unitPrice = product.price,
-                subtotal = subtotal
+            val subtotal = product.price.multiply(BigDecimal(quantity))
+
+            sale.items.add(
+                SaleItem(
+                    sale = sale,
+                    product = product,
+                    quantity = quantity,
+                    unitPrice = product.price,
+                    subtotal = subtotal
+                )
             )
 
-            sale.items.add(saleItem)
-            total += subtotal
+            sale.totalAmount += subtotal
         }
 
-        sale.totalAmount = total
+        /* =========================
+           Criar pagamento
+           ========================= */
+        sale.status = SaleStatus.PENDING_PAYMENT
 
-        val finalSale = saleRepository.save(sale)
-
-        finalSale.items.forEach {
-            stockService.decreaseStock(
-                product = it.product,
-                quantity = it.quantity,
-                referenceId = finalSale.id!!
-            )
-        }
-
-        paymentRepository.save(
-            Payment(
-                sale = finalSale,
-                amount = total,
-                method = request.paymentMethod
-            )
+        val payment = Payment(
+            sale = sale,
+            method = request.paymentMethod,
+            amount = sale.totalAmount,
+            status = PaymentStatus.PAID
         )
 
-        return finalSale
+        sale.payments.add(payment)
+        sale.status = SaleStatus.COMPLETED
+
+        /* =========================
+           Persistir venda
+           ========================= */
+        val savedSale = saleRepository.save(sale)
+
+        /* =========================
+           Baixa de estoque (NÃO bloqueia)
+           ========================= */
+        savedSale.items.forEach { item ->
+            stockService.decreaseStockIfExists(
+                product = item.product,
+                quantity = item.quantity,
+                referenceId = savedSale.id!!
+            )
+        }
+
+        return savedSale
     }
 }
