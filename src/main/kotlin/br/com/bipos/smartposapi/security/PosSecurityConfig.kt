@@ -11,14 +11,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
-@Order(1)
-class PosSecurityConfig(
+class SecurityConfig(
     private val jwtAuthenticationFilter: PosJwtAuthenticationFilter
 ) {
 
+    // 🔹 POS
     @Bean
+    @Order(1)
     fun posFilterChain(http: HttpSecurity): SecurityFilterChain {
-
         http
             .securityMatcher("/pos/**")
             .csrf { it.disable() }
@@ -36,6 +36,21 @@ class PosSecurityConfig(
 
         return http.build()
     }
+
+    // 🔹 Fallback (OBRIGATÓRIA)
+    @Bean
+    @Order(2)
+    fun fallbackFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            .securityMatcher("/**")
+            .csrf { it.disable() }
+            .authorizeHttpRequests {
+                it.anyRequest().denyAll()
+            }
+
+        return http.build()
+    }
 }
+
 
 
