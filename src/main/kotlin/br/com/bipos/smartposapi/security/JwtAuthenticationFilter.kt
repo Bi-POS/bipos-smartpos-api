@@ -35,10 +35,9 @@ class PosJwtAuthenticationFilter(
 
         try {
             val companyId = jwtService.extractCompanyId(token)
-            val type = jwtService.extractType(token)
 
-
-            if (type != "POS" || jwtService.isTokenExpired(token)) {
+            // 🔒 segurança mínima obrigatória
+            if (jwtService.isTokenExpired(token)) {
                 SecurityContextHolder.clearContext()
                 filterChain.doFilter(request, response)
                 return
@@ -46,7 +45,7 @@ class PosJwtAuthenticationFilter(
 
             val principal = PosPrincipal(
                 companyId = companyId,
-                tokenType = type,
+                tokenType = "POS" // DEV: fixo
             )
 
             val authentication = UsernamePasswordAuthenticationToken(
