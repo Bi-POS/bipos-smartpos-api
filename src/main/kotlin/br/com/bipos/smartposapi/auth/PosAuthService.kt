@@ -55,6 +55,7 @@ class PosAuthService(
         )
 
         val token = jwtService.generateToken(credential)
+        println("🔥 TOKEN GERADO AGORA = $token")
 
         // 🔥 USER VISUAL (OWNER)
         val owner = userRepository.findFirstByCompanyIdAndRoleAndActiveTrue(
