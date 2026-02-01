@@ -15,6 +15,8 @@ import java.util.*
 class PosJwtService(
     private val props: PosJwtProperties
 ) {
+    private val POS_TOKEN_VALIDITY_MS = 1000L * 60 * 60 * 2
+
 
     private val key: Key by lazy {
         Keys.hmacShaKeyFor(
@@ -31,7 +33,7 @@ class PosJwtService(
 
     fun generateToken(credential: PosCredential): String {
         val now = Date()
-        val exp = Date(now.time + validityMs)
+        val exp = Date(now.time + POS_TOKEN_VALIDITY_MS)
 
         val claims = Jwts.claims().apply {
             subject = credential.cnpj
