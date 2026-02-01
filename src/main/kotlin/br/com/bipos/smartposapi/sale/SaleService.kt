@@ -11,7 +11,7 @@ import br.com.bipos.smartposapi.stock.StockService
 import jakarta.transaction.Transactional
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
-import java.util.UUID
+import java.util.*
 
 @Service
 class SaleService(
