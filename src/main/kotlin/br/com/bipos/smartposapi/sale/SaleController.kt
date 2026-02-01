@@ -28,9 +28,9 @@ class SaleController(
         )
 
         return SaleResponse(
-            id = sale.id,
+            id = sale.id.toString(),
             totalAmount = sale.totalAmount,
-            status = sale.status,
+            status = sale.status
         )
     }
 }
