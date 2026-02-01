@@ -15,8 +15,16 @@ class PosJwtAuthenticationFilter(
     private val jwtService: PosJwtService
 ) : OncePerRequestFilter() {
 
+    companion object {
+        private val log = org.slf4j.LoggerFactory.getLogger(PosJwtAuthenticationFilter::class.java)
+    }
+
     override fun shouldNotFilter(request: HttpServletRequest): Boolean {
-        return request.servletPath.startsWith("/pos/auth")
+        val skip = request.servletPath.startsWith("/pos/auth")
+        if (skip) {
+            log.debug("🔓 POS | Skip auth route: {}", request.servletPath)
+        }
+        return skip
     }
 
     override fun doFilterInternal(
@@ -24,9 +32,21 @@ class PosJwtAuthenticationFilter(
         response: HttpServletResponse,
         filterChain: FilterChain
     ) {
+        val path = request.servletPath
+        val method = request.method
+
+        log.info("➡️ POS AUTH | {} {}", method, path)
+
         val authHeader = request.getHeader("Authorization")
 
-        if (authHeader.isNullOrBlank() || !authHeader.startsWith("Bearer ")) {
+        if (authHeader.isNullOrBlank()) {
+            log.warn("⛔ POS AUTH | Authorization header ausente")
+            filterChain.doFilter(request, response)
+            return
+        }
+
+        if (!authHeader.startsWith("Bearer ")) {
+            log.warn("⛔ POS AUTH | Authorization não é Bearer")
             filterChain.doFilter(request, response)
             return
         }
@@ -34,18 +54,25 @@ class PosJwtAuthenticationFilter(
         val token = authHeader.substring(7)
 
         try {
-            val companyId = jwtService.extractCompanyId(token)
-
-            // 🔒 segurança mínima obrigatória
             if (jwtService.isTokenExpired(token)) {
-                SecurityContextHolder.clearContext()
-                filterChain.doFilter(request, response)
-                return
+                log.warn("⛔ POS AUTH | Token expirado")
+                throw RuntimeException("Token expirado")
             }
+
+            val type = jwtService.extractType(token)
+            log.info("🔍 POS AUTH | Token type = {}", type)
+
+            if (type != "POS") {
+                log.warn("⛔ POS AUTH | Token não é POS (type={})", type)
+                throw RuntimeException("Token inválido")
+            }
+
+            val companyId = jwtService.extractCompanyId(token)
+            log.info("🏢 POS AUTH | companyId = {}", companyId)
 
             val principal = PosPrincipal(
                 companyId = companyId,
-                tokenType = "POS" // DEV: fixo
+                tokenType = type
             )
 
             val authentication = UsernamePasswordAuthenticationToken(
@@ -56,8 +83,13 @@ class PosJwtAuthenticationFilter(
 
             SecurityContextHolder.getContext().authentication = authentication
 
+            log.info("✅ POS AUTH | Authentication setado com sucesso")
+
         } catch (ex: Exception) {
+            log.error("❌ POS AUTH | Falha na autenticação: {}", ex.message)
             SecurityContextHolder.clearContext()
+            response.sendError(HttpServletResponse.SC_FORBIDDEN)
+            return
         }
 
         filterChain.doFilter(request, response)
