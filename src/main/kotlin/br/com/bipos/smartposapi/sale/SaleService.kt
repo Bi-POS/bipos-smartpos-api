@@ -1,9 +1,10 @@
 package br.com.bipos.smartposapi.sale
 
-import br.com.bipos.smartposapi.company.CompanyService
+import br.com.bipos.smartposapi.auth.PosAuthContext
 import br.com.bipos.smartposapi.domain.catalog.Payment
 import br.com.bipos.smartposapi.domain.catalog.Sale
 import br.com.bipos.smartposapi.domain.catalog.SaleItem
+import br.com.bipos.smartposapi.domain.company.Company
 import br.com.bipos.smartposapi.payment.PaymentStatus
 import br.com.bipos.smartposapi.sale.dto.SaleRequest
 import br.com.bipos.smartposapi.sale.product.PosSaleProductRepository
@@ -11,31 +12,26 @@ import br.com.bipos.smartposapi.stock.StockService
 import jakarta.transaction.Transactional
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
-import java.util.*
+import java.time.LocalDateTime
+
 
 @Service
 class SaleService(
     private val productRepository: PosSaleProductRepository,
     private val saleRepository: SaleRepository,
-    private val companyService: CompanyService,
     private val stockService: StockService
 ) {
 
     @Transactional
     fun createSale(
-        companyId: UUID?,
+        auth: PosAuthContext,
+        company: Company,
         request: SaleRequest
     ): Sale {
 
         if (request.items.isEmpty()) {
             throw IllegalArgumentException("Venda sem itens")
         }
-
-        /* =========================
-           Buscar Company
-           ========================= */
-        val company = companyService.findById(companyId)
-            ?: throw IllegalArgumentException("Empresa não encontrada")
 
         /* =========================
            Buscar produtos
@@ -61,10 +57,9 @@ class SaleService(
         sale.status = SaleStatus.CREATED
 
         /* =========================
-           Criar itens da venda
+           Criar itens
            ========================= */
         request.items.forEach { itemReq ->
-
             val product = products[itemReq.productId]
                 ?: throw IllegalArgumentException("Produto não encontrado")
 
@@ -87,7 +82,7 @@ class SaleService(
         }
 
         /* =========================
-           Criar pagamento
+           Pagamento
            ========================= */
         sale.status = SaleStatus.PENDING_PAYMENT
 
@@ -95,19 +90,19 @@ class SaleService(
             sale = sale,
             method = request.paymentMethod,
             amount = sale.totalAmount,
-            status = PaymentStatus.PAID
+            status = PaymentStatus.PAID,
+            posSerial = auth.serialNumber,
+            user = auth.user,
+            paidAt = LocalDateTime.now()
         )
 
         sale.payments.add(payment)
         sale.status = SaleStatus.COMPLETED
 
-        /* =========================
-           Persistir venda
-           ========================= */
         val savedSale = saleRepository.save(sale)
 
         /* =========================
-           Baixa de estoque (NÃO bloqueia)
+           Estoque
            ========================= */
         savedSale.items.forEach { item ->
             stockService.decreaseStockIfExists(

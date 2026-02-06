@@ -1,6 +1,7 @@
 package br.com.bipos.smartposapi.auth
 
-import br.com.bipos.smartposapi.credential.PosCredential
+import br.com.bipos.smartposapi.credential.PosDevice
+import br.com.bipos.smartposapi.domain.user.AppUser
 import br.com.bipos.smartposapi.security.PosJwtProperties
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
@@ -31,16 +32,21 @@ class PosJwtService(
     // TOKEN GENERATION
     // ===============================
 
-    fun generateToken(credential: PosCredential): String {
+    fun generateToken(
+        user: AppUser,
+        pos: PosDevice
+    ): String {
         val now = Date()
         val exp = Date(now.time + POS_TOKEN_VALIDITY_MS)
 
         val claims = Jwts.claims().apply {
-            subject = credential.cnpj
-            this["companyId"] = credential.company.id.toString()
-            this["serialNumber"] = credential.serialNumber
-            this["posVersion"] = credential.posVersion
+            subject = user.id.toString()               // 👤 quem está logado
             this["type"] = "POS"
+            this["companyId"] = user.company?.id.toString()
+            this["userId"] = user.id.toString()
+            this["serialNumber"] = pos.serialNumber
+            this["posVersion"] = pos.posVersion
+            this["role"] = user.role.name              // OPERATOR, MANAGER, etc
         }
 
         return Jwts.builder()
@@ -83,6 +89,14 @@ class PosJwtService(
     // ===============================
     // PRIVATE
     // ===============================
+    fun extractUserId(token: String): UUID =
+        UUID.fromString(extractAllClaims(token)["userId"] as String)
+
+    fun extractSerialNumber(token: String): String =
+        extractAllClaims(token)["serialNumber"] as String
+
+    fun extractPosVersion(token: String): String =
+        extractAllClaims(token)["posVersion"] as String
 
     private fun <T> extractClaim(token: String, resolver: (Claims) -> T): T {
         val claims = extractAllClaims(token)

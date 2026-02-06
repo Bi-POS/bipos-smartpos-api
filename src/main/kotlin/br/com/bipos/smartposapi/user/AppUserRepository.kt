@@ -11,4 +11,11 @@ interface AppUserRepository : JpaRepository<AppUser, UUID> {
         companyId: UUID,
         role: UserRole
     ): AppUser?
+
+    fun findByEmailAndActiveTrue(email: String?): AppUser?
+
+    fun findByIdAndActiveTrue(id: UUID): AppUser?
+
+    fun findByDocumentAndActiveTrue(document: String): AppUser?
+
 }

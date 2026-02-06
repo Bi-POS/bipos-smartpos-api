@@ -1,7 +1,8 @@
 package br.com.bipos.smartposapi.auth.dto
 
 data class PosAuthRequest(
-    val document: String,
+    val email: String? = null,
+    val document: String? = null,
     val password: String,
     val serialNumber: String,
     val posVersion: String

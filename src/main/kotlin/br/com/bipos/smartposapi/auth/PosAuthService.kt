@@ -3,17 +3,17 @@ package br.com.bipos.smartposapi.auth
 import br.com.bipos.smartposapi.audit.AuditAction
 import br.com.bipos.smartposapi.audit.PosAuditService
 import br.com.bipos.smartposapi.auth.dto.*
-import br.com.bipos.smartposapi.credential.PosCredentialRepository
-import br.com.bipos.smartposapi.domain.user.UserRole
+import br.com.bipos.smartposapi.credential.PosDeviceRepository
 import br.com.bipos.smartposapi.exception.InvalidPosCredentialsException
 import br.com.bipos.smartposapi.user.AppUserRepository
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
+import java.time.LocalDateTime
 
 @Service
 class PosAuthService(
-    private val repository: PosCredentialRepository,
+    private val posDeviceRepository: PosDeviceRepository,
     private val userRepository: AppUserRepository,
     private val passwordEncoder: PasswordEncoder,
     private val jwtService: PosJwtService,
@@ -25,63 +25,85 @@ class PosAuthService(
         httpRequest: HttpServletRequest
     ): PosAuthResponse {
 
-        val document = request.document.replace(Regex("[^0-9]"), "")
+        println("========== LOGIN POS ==========")
+        println("EMAIL: ${request.email}")
+        println("DOCUMENT: ${request.document}")
+        println("SERIAL: ${request.serialNumber}")
 
-        val credential = repository.findByCnpjAndActiveTrue(document)
+        val user = when {
+            !request.email.isNullOrBlank() -> {
+                userRepository.findByEmailAndActiveTrue(
+                    request.email.trim().lowercase()
+                )
+            }
+
+            !request.document.isNullOrBlank() -> {
+                val doc = request.document.replace(Regex("[^0-9]"), "")
+                userRepository.findByDocumentAndActiveTrue(doc)
+            }
+
+            else -> {
+                loginFailed(httpRequest)
+            }
+        } ?: loginFailed(httpRequest)
+
+        val passwordOk = passwordEncoder.matches(
+            request.password,
+            user.passwordHash
+        )
+
+        if (!passwordOk) loginFailed(httpRequest)
+
+        val pos = posDeviceRepository
+            .findBySerialNumberAndActiveTrue(request.serialNumber)
             ?: loginFailed(httpRequest)
 
-        if (!passwordEncoder.matches(request.password, credential.passwordHash)) {
+        if (pos.company.id != user.company?.id) {
             loginFailed(httpRequest)
         }
 
-        /* 🔐 VALIDA COMPANY ANTES DE QUALQUER USO */
-        val company = credential.company
-            ?: throw IllegalStateException("POS Credential sem company vinculada")
+        println("✅ LOGIN VALIDATED")
 
-        val companyId = company.id
-            ?: throw IllegalStateException("Company sem ID")
+        /* 6️⃣ Atualiza dados do POS */
+        pos.lastSeenAt = LocalDateTime.now()
+        pos.posVersion = request.posVersion
+        posDeviceRepository.save(pos)
 
-        /* Atualiza dados do POS */
-        credential.serialNumber = request.serialNumber
-        credential.posVersion = request.posVersion
-        repository.save(credential)
-
+        /* 7️⃣ Auditoria */
         auditService.log(
-            companyId = companyId,
+            companyId = pos.company.id,
             action = AuditAction.LOGIN_SUCCESS.name,
             request = httpRequest,
-            serialNumber = credential.serialNumber,
-            posVersion = credential.posVersion
+            serialNumber = pos.serialNumber,
+            posVersion = pos.posVersion
         )
 
-        val token = jwtService.generateToken(credential)
-        println("🔥 TOKEN GERADO AGORA = $token")
-
-        // 🔥 USER VISUAL (OWNER)
-        val owner = userRepository.findFirstByCompanyIdAndRoleAndActiveTrue(
-            companyId,
-            UserRole.OWNER
+        /* 8️⃣ Gera token POS + USER */
+        val token = jwtService.generateToken(
+            user = user,
+            pos = pos
         )
 
+        /* 9️⃣ Retorno */
         return PosAuthResponse(
             token = token,
 
             company = CompanySnapshot(
-                id = companyId.toString(),
-                name = company.name,
-                cnpj = company.document,
-                logoPath = company.logoUrl
+                id = pos.company.id.toString(),
+                name = user.company?.name ?: "",
+                cnpj = user.company?.document,
+                logoPath = user.company?.logoUrl
             ),
 
             user = UserSnapshot(
-                id = owner?.id?.toString(),
-                name = owner?.name ?: company.name,
-                photoPath = owner?.photoUrl
+                id = user.id?.toString(),
+                name = user.name,
+                photoPath = user.photoUrl
             ),
 
             pos = PosSnapshot(
-                serialNumber = credential.serialNumber,
-                version = credential.posVersion
+                serialNumber = pos.serialNumber,
+                version = pos.posVersion
             )
         )
     }

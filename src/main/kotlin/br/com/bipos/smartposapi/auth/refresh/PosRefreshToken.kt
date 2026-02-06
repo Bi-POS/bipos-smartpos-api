@@ -12,18 +12,22 @@ class PosRefreshToken(
     @GeneratedValue
     val id: UUID? = null,
 
-    @Column(nullable = false)
-    val companyId: UUID,
-
-    @Column(nullable = false, unique = true, length = 64)
+    @Column(nullable = false, unique = true)
     val token: String,
 
     @Column(nullable = false)
-    val expiresAt: Instant,
+    val userId: UUID,
+
+    @Column(nullable = false)
+    val companyId: UUID,
+
+    @Column(name = "serial_number", nullable = false)
+    val serialNumber: String,
 
     @Column(nullable = false)
     var active: Boolean = true,
 
-    @Column(nullable = false)
-    val createdAt: Instant = Instant.now()
+    @Column(name = "expires_at", nullable = false)
+    val expiresAt: Instant
 )
+

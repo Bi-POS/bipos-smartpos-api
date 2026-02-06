@@ -15,20 +15,28 @@ class SecurityConfig(
     private val jwtAuthenticationFilter: PosJwtAuthenticationFilter
 ) {
 
-    // 🔹 POS
     @Bean
-    @Order(1)
     fun posFilterChain(http: HttpSecurity): SecurityFilterChain {
         http
-            .securityMatcher("/pos/**")
             .csrf { it.disable() }
+            .formLogin { it.disable() }
+            .httpBasic { it.disable() }
+
             .sessionManagement {
                 it.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             }
+
             .authorizeHttpRequests {
-                it.requestMatchers("/pos/auth/**").permitAll()
-                it.anyRequest().authenticated()
+                it.requestMatchers(
+                    "/pos/auth/login",
+                    "/pos/auth/refresh"
+                ).permitAll()
+
+                it.requestMatchers("/pos/**").hasRole("POS")
+
+                it.anyRequest().denyAll()
             }
+
             .addFilterBefore(
                 jwtAuthenticationFilter,
                 UsernamePasswordAuthenticationFilter::class.java
@@ -36,21 +44,8 @@ class SecurityConfig(
 
         return http.build()
     }
-
-    // 🔹 Fallback (OBRIGATÓRIA)
-    @Bean
-    @Order(2)
-    fun fallbackFilterChain(http: HttpSecurity): SecurityFilterChain {
-        http
-            .securityMatcher("/**")
-            .csrf { it.disable() }
-            .authorizeHttpRequests {
-                it.anyRequest().denyAll()
-            }
-
-        return http.build()
-    }
 }
+
 
 
 

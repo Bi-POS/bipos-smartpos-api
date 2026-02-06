@@ -11,7 +11,7 @@ data class PosAuthResponse(
 data class CompanySnapshot(
     val id: String,
     val name: String,
-    val cnpj: String,
+    val cnpj: String?,
     val logoPath: String?
 )
 

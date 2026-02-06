@@ -7,7 +7,12 @@ import java.time.LocalDateTime
 import java.util.*
 
 @Entity
-@Table(name = "users")
+@Table(
+    name = "users",
+    indexes = [
+        Index(name = "idx_users_document", columnList = "document")
+    ]
+)
 class AppUser(
 
     @Id
@@ -19,6 +24,13 @@ class AppUser(
 
     @Column(nullable = false, unique = true)
     var email: String = "",
+
+    /**
+     * CPF ou CNPJ (somente números)
+     * Pode ser null para usuários criados só com email
+     */
+    @Column(nullable = true)
+    var document: String? = null,
 
     @Column(nullable = false)
     var passwordHash: String = "",

@@ -5,19 +5,11 @@ import java.util.*
 
 object PosSecurityUtils {
 
-    fun getCompanyId(): UUID {
-        val authentication = SecurityContextHolder.getContext().authentication
-            ?: throw IllegalStateException("No authentication in context")
+    fun principal(): PosPrincipal =
+        SecurityContextHolder.getContext().authentication?.principal as? PosPrincipal
+            ?: throw IllegalStateException("POS não autenticado")
 
-        return when (val principal = authentication.principal) {
-            is PosPrincipal -> principal.companyId
-            is String -> UUID.fromString(principal) // fallback legado
-            else -> throw IllegalStateException(
-                "Unsupported principal type: ${principal::class.java.name}"
-            )
-        }
-    }
-
-    fun isAuthenticated(): Boolean =
-        SecurityContextHolder.getContext().authentication != null
+    fun companyId(): UUID = principal().companyId
+    fun userId(): UUID = principal().userId
+    fun serialNumber(): String = principal().serialNumber
 }

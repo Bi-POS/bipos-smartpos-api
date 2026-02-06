@@ -10,7 +10,7 @@ class PosSaleGroupService(
 ) {
 
     fun list(): List<PosSaleGroupDTO> {
-        val companyId = PosSecurityUtils.getCompanyId()
+        val companyId = PosSecurityUtils.companyId()
 
         return repository.findAllByCompany_Id(companyId)
             .map {

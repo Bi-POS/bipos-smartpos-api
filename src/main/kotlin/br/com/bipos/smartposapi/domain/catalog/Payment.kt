@@ -1,5 +1,6 @@
 package br.com.bipos.smartposapi.domain.catalog
 
+import br.com.bipos.smartposapi.domain.user.AppUser
 import br.com.bipos.smartposapi.payment.PaymentMethod
 import br.com.bipos.smartposapi.payment.PaymentStatus
 import jakarta.persistence.*
@@ -29,6 +30,13 @@ class Payment(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var status: PaymentStatus = PaymentStatus.PAID,
+
+    @Column(name = "pos_serial", nullable = false)
+    val posSerial: String,
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    val user: AppUser,
 
     val paidAt: LocalDateTime = LocalDateTime.now()
 )

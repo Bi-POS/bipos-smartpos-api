@@ -42,3 +42,4 @@ class Sale(
     val payments: MutableList<Payment> = mutableListOf()
 )
 
+
