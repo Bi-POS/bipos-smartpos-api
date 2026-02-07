@@ -51,22 +51,24 @@ class PosRefreshController(
             pos = pos
         )
 
-        val company = user.company
-
         return PosAuthResponse(
             token = token,
 
             company = CompanySnapshot(
-                id = company?.id.toString(),
-                name = company?.name ?: "",
-                cnpj = company?.document ?: "",
-                logoPath = company?.logoUrl
+                id = pos.company.id.toString(),
+                name = user.company?.name ?: "",
+                cnpj = user.company?.document,
+                logoPath = user.company?.logoUrl,
+                email = user.company?.email,
+                phone = user.company?.phone
             ),
 
             user = UserSnapshot(
-                id = user.id.toString(),
+                id = user.id?.toString(),
                 name = user.name,
-                photoPath = user.photoUrl
+                photoPath = user.photoUrl,
+                email = user.email,
+                role = user.role.name,
             ),
 
             pos = PosSnapshot(

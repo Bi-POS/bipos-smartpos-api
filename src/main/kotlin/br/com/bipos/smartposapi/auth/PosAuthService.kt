@@ -15,7 +15,6 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.LocalDateTime
-import java.util.UUID
 
 @Service
 class PosAuthService(
@@ -91,21 +90,31 @@ class PosAuthService(
             pos = pos
         )
 
+        val company = user.company
+            ?: throw IllegalStateException("Usuário sem empresa")
+
+
+        println("COMPANY -> email=${company.email} phone=${company.phone}")
+
         /* 9️⃣ Retorno */
         return PosAuthResponse(
             token = token,
 
             company = CompanySnapshot(
-                id = pos.company.id.toString(),
-                name = user.company?.name ?: "",
-                cnpj = user.company?.document,
-                logoPath = user.company?.logoUrl
+                id = company.id.toString(),
+                name = company.name,
+                cnpj = company.document,
+                logoPath = company.logoUrl,
+                email = company.email,
+                phone = company.phone
             ),
 
             user = UserSnapshot(
                 id = user.id?.toString(),
                 name = user.name,
-                photoPath = user.photoUrl
+                photoPath = user.photoUrl,
+                email = user.email,
+                role = user.role.name,
             ),
 
             pos = PosSnapshot(
@@ -189,21 +198,28 @@ class PosAuthService(
             pos = pos
         )
 
+        val company = user.company
+            ?: throw IllegalStateException("Usuário sem empresa")
+
         // 🔟 Retorno padrão
         return PosAuthResponse(
             token = token,
 
             company = CompanySnapshot(
-                id = pos.company.id.toString(),
-                name = user.company?.name ?: "",
-                cnpj = user.company?.document,
-                logoPath = user.company?.logoUrl
+                id = company.id.toString(),
+                name = company.name,
+                cnpj = company.document,
+                logoPath = company.logoUrl,
+                email = company.email,
+                phone = company.phone
             ),
 
             user = UserSnapshot(
                 id = user.id?.toString(),
                 name = user.name,
-                photoPath = user.photoUrl
+                photoPath = user.photoUrl,
+                email = user.email,
+                role = user.role.name,
             ),
 
             pos = PosSnapshot(
