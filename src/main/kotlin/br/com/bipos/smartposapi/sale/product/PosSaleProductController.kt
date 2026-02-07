@@ -12,6 +12,9 @@ import java.util.*
 class PosSaleProductController(
     private val service: PosSaleProductService
 ) {
+    @GetMapping("/products")
+    fun listAll(): List<PosSaleProductDTO> =
+        service.list()
 
     @GetMapping("/{groupId}/products")
     fun listByGroup(

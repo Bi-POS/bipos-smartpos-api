@@ -29,7 +29,8 @@ class SecurityConfig(
             .authorizeHttpRequests {
                 it.requestMatchers(
                     "/pos/auth/login",
-                    "/pos/auth/refresh"
+                    "/pos/auth/refresh",
+                    "/pos/auth/login/qr"
                 ).permitAll()
 
                 it.requestMatchers("/pos/**").hasRole("POS")

@@ -102,4 +102,11 @@ class PosJwtService(
         val claims = extractAllClaims(token)
         return resolver(claims)
     }
+
+    fun generatePosToken(
+        user: AppUser,
+        pos: PosDevice
+    ): String {
+        return generateToken(user, pos)
+    }
 }

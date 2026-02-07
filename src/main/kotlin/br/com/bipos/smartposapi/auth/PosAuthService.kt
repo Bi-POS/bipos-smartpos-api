@@ -5,11 +5,17 @@ import br.com.bipos.smartposapi.audit.PosAuditService
 import br.com.bipos.smartposapi.auth.dto.*
 import br.com.bipos.smartposapi.credential.PosDeviceRepository
 import br.com.bipos.smartposapi.exception.InvalidPosCredentialsException
+import br.com.bipos.smartposapi.exception.InvalidQrTokenException
+import br.com.bipos.smartposapi.login.PosQrLoginRequest
+import br.com.bipos.smartposapi.login.SmartPosQrTokenRepository
 import br.com.bipos.smartposapi.user.AppUserRepository
 import jakarta.servlet.http.HttpServletRequest
+import jakarta.transaction.Transactional
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
+import java.time.Instant
 import java.time.LocalDateTime
+import java.util.UUID
 
 @Service
 class PosAuthService(
@@ -17,7 +23,8 @@ class PosAuthService(
     private val userRepository: AppUserRepository,
     private val passwordEncoder: PasswordEncoder,
     private val jwtService: PosJwtService,
-    private val auditService: PosAuditService
+    private val auditService: PosAuditService,
+    private val qrTokenRepository: SmartPosQrTokenRepository
 ) {
 
     fun login(
@@ -115,6 +122,95 @@ class PosAuthService(
             request = httpRequest
         )
         throw InvalidPosCredentialsException()
+    }
+
+    @Transactional
+    fun loginWithQr(
+        request: PosQrLoginRequest,
+        httpRequest: HttpServletRequest
+    ): PosAuthResponse {
+
+        println("========== LOGIN POS QR ==========")
+        println("SERIAL: ${request.serialNumber}")
+        println("QR TOKEN: ${request.qrToken}")
+
+        val now = Instant.now()
+
+        // 1️⃣ Busca token no banco
+        val qrToken = qrTokenRepository
+            .findByTokenAndUsedFalse(request.qrToken)
+            ?: throw InvalidQrTokenException()
+
+        // 2️⃣ Verifica expiração
+        if (qrToken.expiresAt.isBefore(now)) {
+            throw InvalidQrTokenException()
+        }
+
+        // 3️⃣ Marca token como usado
+        qrToken.used = true
+        qrTokenRepository.save(qrToken)
+
+        // 4️⃣ Carrega usuário
+        val user = userRepository.findById(
+            qrToken.userId
+        ).orElseThrow {
+            InvalidPosCredentialsException()
+        }
+
+        // 5️⃣ Carrega POS
+        val pos = posDeviceRepository
+            .findBySerialNumberAndActiveTrue(request.serialNumber)
+            ?: throw InvalidPosCredentialsException()
+
+        // 6️⃣ Garante empresa correta
+        if (pos.company.id.toString() != qrToken.companyId.toString()) {
+            throw InvalidPosCredentialsException()
+        }
+
+        println("✅ LOGIN QR VALIDATED")
+
+        // 7️⃣ Atualiza POS
+        pos.lastSeenAt = LocalDateTime.now()
+        pos.posVersion = request.posVersion
+        posDeviceRepository.save(pos)
+
+        // 8️⃣ Auditoria
+        auditService.log(
+            companyId = pos.company.id,
+            action = AuditAction.LOGIN_QR_SUCCESS.name,
+            request = httpRequest,
+            serialNumber = pos.serialNumber,
+            posVersion = pos.posVersion
+        )
+
+        // 9️⃣ Gera JWT POS
+        val token = jwtService.generateToken(
+            user = user,
+            pos = pos
+        )
+
+        // 🔟 Retorno padrão
+        return PosAuthResponse(
+            token = token,
+
+            company = CompanySnapshot(
+                id = pos.company.id.toString(),
+                name = user.company?.name ?: "",
+                cnpj = user.company?.document,
+                logoPath = user.company?.logoUrl
+            ),
+
+            user = UserSnapshot(
+                id = user.id?.toString(),
+                name = user.name,
+                photoPath = user.photoUrl
+            ),
+
+            pos = PosSnapshot(
+                serialNumber = pos.serialNumber,
+                version = pos.posVersion
+            )
+        )
     }
 }
 
