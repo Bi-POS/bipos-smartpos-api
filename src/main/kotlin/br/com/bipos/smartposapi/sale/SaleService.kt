@@ -89,11 +89,19 @@ class SaleService(
         val payment = Payment(
             sale = sale,
             method = request.paymentMethod,
-            amount = sale.totalAmount,
+            amount = request.amount,
             status = PaymentStatus.PAID,
             posSerial = auth.serialNumber,
             user = auth.user,
-            paidAt = LocalDateTime.now()
+            paidAt = LocalDateTime.now(),
+
+            nsu = request.nsu,
+            authorizationCode = request.authorizationCode,
+            cardBrand = request.cardBrand,
+            cardNumberMasked = request.cardNumberMasked,
+            installments = request.installments,
+            hostMessage = request.hostMessage,
+            acquirerResponse = request.acquirerResponse
         )
 
         sale.payments.add(payment)

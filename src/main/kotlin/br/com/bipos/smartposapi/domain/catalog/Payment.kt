@@ -38,5 +38,27 @@ class Payment(
     @JoinColumn(name = "user_id", nullable = false)
     val user: AppUser,
 
-    val paidAt: LocalDateTime = LocalDateTime.now()
+    val paidAt: LocalDateTime = LocalDateTime.now(),
+
+    // ✅ CAMPOS DO TEF - AGORA NO PAYMENT!
+    @Column(name = "nsu", length = 20)
+    var nsu: String? = null,
+
+    @Column(name = "authorization_code", length = 20)
+    var authorizationCode: String? = null,
+
+    @Column(name = "card_brand", length = 30)
+    var cardBrand: String? = null,
+
+    @Column(name = "card_number_masked", length = 20)
+    var cardNumberMasked: String? = null,
+
+    @Column(name = "installments")
+    var installments: Int = 1,
+
+    @Column(name = "host_message", length = 50)
+    var hostMessage: String? = null,
+
+    @Column(name = "acquirer_response", length = 10)
+    var acquirerResponse: String? = null
 )
