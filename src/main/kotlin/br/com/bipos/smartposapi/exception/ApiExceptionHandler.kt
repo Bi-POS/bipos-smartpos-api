@@ -4,9 +4,11 @@ import jakarta.persistence.EntityNotFoundException
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.servlet.resource.NoResourceFoundException
 import java.time.Instant
 
 @ControllerAdvice
@@ -23,6 +25,17 @@ class ApiExceptionHandler {
             request = request
         )
 
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun handleUnreadableMessage(
+        ex: HttpMessageNotReadableException,
+        request: HttpServletRequest
+    ): ResponseEntity<ApiErrorResponse> =
+        build(
+            status = HttpStatus.BAD_REQUEST,
+            message = "Corpo da requisição inválido",
+            request = request
+        )
+
     @ExceptionHandler(EntityNotFoundException::class)
     fun handleNotFound(
         ex: EntityNotFoundException,
@@ -31,6 +44,17 @@ class ApiExceptionHandler {
         build(
             status = HttpStatus.NOT_FOUND,
             message = ex.message ?: "Recurso não encontrado",
+            request = request
+        )
+
+    @ExceptionHandler(NoResourceFoundException::class)
+    fun handleNoResourceFound(
+        ex: NoResourceFoundException,
+        request: HttpServletRequest
+    ): ResponseEntity<ApiErrorResponse> =
+        build(
+            status = HttpStatus.NOT_FOUND,
+            message = "Recurso não encontrado",
             request = request
         )
 

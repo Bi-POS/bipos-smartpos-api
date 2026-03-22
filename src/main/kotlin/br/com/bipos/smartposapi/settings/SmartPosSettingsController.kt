@@ -1,8 +1,8 @@
 package br.com.bipos.smartposapi.settings
 
+import br.com.bipos.smartposapi.security.PosSecurityUtils
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import java.util.*
 
 @RestController
 @RequestMapping("/pos/settings")
@@ -10,59 +10,53 @@ class SmartPosSettingsController(
     private val settingsService: SmartPosSettingsService
 ) {
 
-    @GetMapping("/{companyId}/print-type")
-    fun getPrintType(
-        @PathVariable companyId: UUID
-    ): ResponseEntity<Map<String, String>> {
+    @GetMapping("/print-type")
+    fun getPrintType(): ResponseEntity<Map<String, String>> {
+        val companyId = PosSecurityUtils.companyId()
         val printType = settingsService.getPrintType(companyId)
         return ResponseEntity.ok(mapOf("printType" to printType))
     }
 
-    @GetMapping("/{companyId}/print-logo")
-    fun shouldPrintLogo(
-        @PathVariable companyId: UUID
-    ): ResponseEntity<Map<String, Boolean>> {
+    @GetMapping("/print-logo")
+    fun shouldPrintLogo(): ResponseEntity<Map<String, Boolean>> {
+        val companyId = PosSecurityUtils.companyId()
         val shouldPrint = settingsService.shouldPrintLogo(companyId)
         return ResponseEntity.ok(mapOf("printLogo" to shouldPrint))
     }
 
-    @GetMapping("/{companyId}/logo-url")
-    fun getLogoUrl(
-        @PathVariable companyId: UUID
-    ): ResponseEntity<Map<String, String?>> {
+    @GetMapping("/logo-url")
+    fun getLogoUrl(): ResponseEntity<Map<String, String?>> {
+        val companyId = PosSecurityUtils.companyId()
         val logoUrl = settingsService.getLogoUrl(companyId)
         return ResponseEntity.ok(mapOf("logoUrl" to logoUrl))
     }
 
-    @GetMapping("/{companyId}/auto-logout")
-    fun getAutoLogout(
-        @PathVariable companyId: UUID
-    ): ResponseEntity<Map<String, Int>> {
+    @GetMapping("/auto-logout")
+    fun getAutoLogout(): ResponseEntity<Map<String, Int>> {
+        val companyId = PosSecurityUtils.companyId()
         val minutes = settingsService.getAutoLogoutMinutes(companyId)
         return ResponseEntity.ok(mapOf("autoLogoutMinutes" to minutes))
     }
 
-    @GetMapping("/{companyId}/dark-mode")
-    fun isDarkMode(
-        @PathVariable companyId: UUID
-    ): ResponseEntity<Map<String, Boolean>> {
+    @GetMapping("/dark-mode")
+    fun isDarkMode(): ResponseEntity<Map<String, Boolean>> {
+        val companyId = PosSecurityUtils.companyId()
         val darkMode = settingsService.isDarkMode(companyId)
         return ResponseEntity.ok(mapOf("darkMode" to darkMode))
     }
 
-    @GetMapping("/{companyId}/sound-enabled")
-    fun isSoundEnabled(
-        @PathVariable companyId: UUID
-    ): ResponseEntity<Map<String, Boolean>> {
+    @GetMapping("/sound-enabled")
+    fun isSoundEnabled(): ResponseEntity<Map<String, Boolean>> {
+        val companyId = PosSecurityUtils.companyId()
         val soundEnabled = settingsService.isSoundEnabled(companyId)
         return ResponseEntity.ok(mapOf("soundEnabled" to soundEnabled))
     }
 
-    @PostMapping("/{companyId}/validate-pin")
+    @PostMapping("/validate-pin")
     fun validatePin(
-        @PathVariable companyId: UUID,
         @RequestBody request: PinValidationRequest
     ): ResponseEntity<PinValidationResponse> {
+        val companyId = PosSecurityUtils.companyId()
         val isValid = settingsService.validatePin(companyId, request.pin)
 
         return ResponseEntity.ok(

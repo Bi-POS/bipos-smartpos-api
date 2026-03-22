@@ -11,6 +11,7 @@ import br.com.bipos.smartposapi.login.SmartPosQrTokenRepository
 import br.com.bipos.smartposapi.user.AppUserRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.transaction.Transactional
+import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -25,50 +26,102 @@ class PosAuthService(
     private val auditService: PosAuditService,
     private val qrTokenRepository: SmartPosQrTokenRepository
 ) {
+    companion object {
+        private val logger = LoggerFactory.getLogger(PosAuthService::class.java)
+    }
 
     fun login(
         request: PosAuthRequest,
         httpRequest: HttpServletRequest
     ): PosAuthResponse {
+        val normalizedEmail = request.email
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf { it.isNotBlank() }
+        val normalizedDocument = request.document
+            ?.replace(Regex("[^0-9]"), "")
+            ?.takeIf { it.isNotBlank() }
 
-        println("========== LOGIN POS ==========")
-        println("EMAIL: ${request.email}")
-        println("DOCUMENT: ${request.document}")
-        println("SERIAL: ${request.serialNumber}")
+        logger.info(
+            "POS login attempt: email={}, document={}, serial={}, version={}",
+            maskEmail(normalizedEmail),
+            maskDocument(normalizedDocument),
+            request.serialNumber,
+            request.posVersion
+        )
 
         val user = when {
-            !request.email.isNullOrBlank() -> {
+            normalizedEmail != null -> {
                 userRepository.findByEmailAndActiveTrue(
-                    request.email.trim().lowercase()
+                    normalizedEmail
                 )
             }
 
-            !request.document.isNullOrBlank() -> {
-                val doc = request.document.replace(Regex("[^0-9]"), "")
-                userRepository.findByDocumentAndActiveTrue(doc)
+            normalizedDocument != null -> {
+                userRepository.findByDocumentAndActiveTrue(normalizedDocument)
             }
 
             else -> {
+                logger.warn(
+                    "POS login failed: missing email/document. serial={}",
+                    request.serialNumber
+                )
                 loginFailed(httpRequest)
             }
-        } ?: loginFailed(httpRequest)
+        } ?: run {
+            logger.warn(
+                "POS login failed: active user not found. email={}, document={}, serial={}",
+                maskEmail(normalizedEmail),
+                maskDocument(normalizedDocument),
+                request.serialNumber
+            )
+            loginFailed(httpRequest)
+        }
 
         val passwordOk = passwordEncoder.matches(
             request.password,
             user.passwordHash
         )
 
-        if (!passwordOk) loginFailed(httpRequest)
-
-        val pos = posDeviceRepository
-            .findBySerialNumberAndActiveTrue(request.serialNumber)
-            ?: loginFailed(httpRequest)
-
-        if (pos.company.id != user.company?.id) {
+        if (!passwordOk) {
+            logger.warn(
+                "POS login failed: password mismatch. userId={}, companyId={}, serial={}",
+                user.id,
+                user.company?.id,
+                request.serialNumber
+            )
             loginFailed(httpRequest)
         }
 
-        println("✅ LOGIN VALIDATED")
+        val pos = posDeviceRepository
+            .findBySerialNumberAndActiveTrue(request.serialNumber)
+            ?: run {
+                logger.warn(
+                    "POS login failed: active POS not found. userId={}, companyId={}, serial={}",
+                    user.id,
+                    user.company?.id,
+                    request.serialNumber
+                )
+                loginFailed(httpRequest)
+            }
+
+        if (pos.company.id != user.company?.id) {
+            logger.warn(
+                "POS login failed: company mismatch. userId={}, userCompanyId={}, posCompanyId={}, serial={}",
+                user.id,
+                user.company?.id,
+                pos.company.id,
+                request.serialNumber
+            )
+            loginFailed(httpRequest)
+        }
+
+        logger.info(
+            "POS login validated. userId={}, companyId={}, serial={}",
+            user.id,
+            pos.company.id,
+            pos.serialNumber
+        )
 
         /* 6️⃣ Atualiza dados do POS */
         pos.lastSeenAt = LocalDateTime.now()
@@ -92,9 +145,6 @@ class PosAuthService(
 
         val company = user.company
             ?: throw IllegalStateException("Usuário sem empresa")
-
-
-        println("COMPANY -> email=${company.email} phone=${company.phone}")
 
         /* 9️⃣ Retorno */
         return PosAuthResponse(
@@ -131,6 +181,28 @@ class PosAuthService(
             request = httpRequest
         )
         throw InvalidPosCredentialsException()
+    }
+
+    private fun maskEmail(email: String?): String? {
+        if (email.isNullOrBlank()) return null
+
+        val parts = email.split("@", limit = 2)
+        if (parts.size != 2) return "***"
+
+        val name = parts[0]
+        val maskedName = when {
+            name.length <= 2 -> "${name.first()}***"
+            else -> "${name.take(2)}***"
+        }
+
+        return "$maskedName@${parts[1]}"
+    }
+
+    private fun maskDocument(document: String?): String? {
+        if (document.isNullOrBlank()) return null
+        if (document.length <= 4) return "***"
+
+        return "${"*".repeat(document.length - 4)}${document.takeLast(4)}"
     }
 
     @Transactional

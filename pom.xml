@@ -54,6 +54,11 @@
             <artifactId>kotlin-reflect</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-kotlin</artifactId>
+        </dependency>
+
         <!-- DB -->
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -94,11 +99,19 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.mockito.kotlin</groupId>
+            <artifactId>mockito-kotlin</artifactId>
+            <version>5.4.0</version>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <!-- ================= BUILD ================= -->
     <build>
         <sourceDirectory>src/main/kotlin</sourceDirectory>
+        <testSourceDirectory>src/test/kotlin</testSourceDirectory>
 
         <plugins>
 
@@ -117,6 +130,23 @@
             <plugin>
                 <groupId>org.jetbrains.kotlin</groupId>
                 <artifactId>kotlin-maven-plugin</artifactId>
+
+                <executions>
+                    <execution>
+                        <id>compile</id>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>test-compile</id>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>test-compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
 
                 <configuration>
                     <jvmTarget>17</jvmTarget>
