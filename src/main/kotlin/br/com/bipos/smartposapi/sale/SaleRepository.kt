@@ -5,7 +5,7 @@ import br.com.bipos.smartposapi.domain.catalog.Sale
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import java.time.LocalDateTime
-import java.util.*
+import java.util.UUID
 
 interface SaleRepository : JpaRepository<Sale, UUID> {
 
@@ -20,5 +20,12 @@ interface SaleRepository : JpaRepository<Sale, UUID> {
 
     fun findAllByOrderByCreatedAtDesc(
         pageable: Pageable
+    ): List<Sale>
+
+    fun findAllByCompany_IdAndStatusAndCreatedAtBetweenOrderByCreatedAtDesc(
+        companyId: UUID,
+        status: SaleStatus,
+        start: LocalDateTime,
+        end: LocalDateTime
     ): List<Sale>
 }

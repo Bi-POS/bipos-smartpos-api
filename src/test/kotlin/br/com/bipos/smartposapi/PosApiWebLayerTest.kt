@@ -40,6 +40,10 @@ import br.com.bipos.smartposapi.sale.SaleController
 import br.com.bipos.smartposapi.sale.SaleRepository
 import br.com.bipos.smartposapi.sale.SaleService
 import br.com.bipos.smartposapi.sale.SaleStatus
+import br.com.bipos.smartposapi.sale.dto.DailySalesReportResponse
+import br.com.bipos.smartposapi.sale.dto.PaymentMethodReportResponse
+import br.com.bipos.smartposapi.sale.dto.RecentSaleReportResponse
+import br.com.bipos.smartposapi.sale.dto.TopProductReportResponse
 import br.com.bipos.smartposapi.sale.dto.SaleItemRequest
 import br.com.bipos.smartposapi.sale.dto.SaleRequest
 import br.com.bipos.smartposapi.sale.group.PosSaleGroupRepository
@@ -85,6 +89,8 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.math.BigDecimal
 import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.UUID
 
 @SpringBootTest(
@@ -312,6 +318,76 @@ class PosApiWebLayerTest(
         assertThat(capturedAuth.companyId).isEqualTo(COMPANY_ID)
         assertThat(capturedAuth.serialNumber).isEqualTo(SERIAL_NUMBER)
         assertThat(capturedAuth.user.id).isEqualTo(USER_ID)
+    }
+
+    @Test
+    fun `GET pos sales daily report returns the authenticated company report`() {
+        val company = company()
+        val reportDate = LocalDate.of(2026, 3, 22)
+        val saleId = UUID.fromString("c8d9f8fd-fec8-44fc-b730-f727ca3e9c4a")
+        val productId = UUID.fromString("2da25790-74fa-4299-bf7c-23ec2ebd4e7d")
+
+        stubValidPosToken()
+        whenever(companyService.getCurrentCompany()).thenReturn(company)
+        whenever(saleService.getDailyReport(COMPANY_ID, reportDate)).thenReturn(
+            DailySalesReportResponse(
+                reportDate = reportDate,
+                totalSales = 3,
+                totalItems = 7,
+                grossRevenue = BigDecimal("125.50"),
+                averageTicket = BigDecimal("41.83"),
+                paymentMethods = listOf(
+                    PaymentMethodReportResponse(
+                        method = PaymentMethod.CREDIT,
+                        salesCount = 2,
+                        totalAmount = BigDecimal("100.50")
+                    ),
+                    PaymentMethodReportResponse(
+                        method = PaymentMethod.PIX,
+                        salesCount = 1,
+                        totalAmount = BigDecimal("25.00")
+                    )
+                ),
+                topProducts = listOf(
+                    TopProductReportResponse(
+                        productId = productId,
+                        name = "Arroz branco",
+                        quantity = 4,
+                        totalAmount = BigDecimal("28.00")
+                    )
+                ),
+                recentSales = listOf(
+                    RecentSaleReportResponse(
+                        saleId = saleId,
+                        createdAt = LocalDateTime.of(2026, 3, 22, 14, 30, 0),
+                        totalAmount = BigDecimal("25.00"),
+                        paymentMethod = PaymentMethod.CREDIT
+                    )
+                )
+            )
+        )
+
+        mockMvc.perform(
+            get("/pos/sales/daily-report")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+                .param("date", reportDate.toString())
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.reportDate").value(reportDate.toString()))
+            .andExpect(jsonPath("$.totalSales").value(3))
+            .andExpect(jsonPath("$.totalItems").value(7))
+            .andExpect(jsonPath("$.grossRevenue").value(125.50))
+            .andExpect(jsonPath("$.averageTicket").value(41.83))
+            .andExpect(jsonPath("$.paymentMethods[0].method").value(PaymentMethod.CREDIT.name))
+            .andExpect(jsonPath("$.paymentMethods[0].salesCount").value(2))
+            .andExpect(jsonPath("$.paymentMethods[0].totalAmount").value(100.50))
+            .andExpect(jsonPath("$.topProducts[0].name").value("Arroz branco"))
+            .andExpect(jsonPath("$.topProducts[0].quantity").value(4))
+            .andExpect(jsonPath("$.recentSales[0].saleId").value(saleId.toString()))
+            .andExpect(jsonPath("$.recentSales[0].paymentMethod").value(PaymentMethod.CREDIT.name))
+            .andExpect(jsonPath("$.recentSales[0].createdAt").value("2026-03-22T14:30:00"))
+
+        verify(saleService).getDailyReport(COMPANY_ID, reportDate)
     }
 
     @Test
@@ -685,3 +761,7 @@ class PosApiWebLayerTest(
     )
     open class TestApplication
 }
+
+
+
+

@@ -2,14 +2,18 @@ package br.com.bipos.smartposapi.sale
 
 import br.com.bipos.smartposapi.company.CompanyService
 import br.com.bipos.smartposapi.exception.ResourceNotFoundException
+import br.com.bipos.smartposapi.sale.dto.DailySalesReportResponse
 import br.com.bipos.smartposapi.sale.dto.SaleRequest
 import br.com.bipos.smartposapi.sale.dto.SaleResponse
 import br.com.bipos.smartposapi.security.PosSecurityUtils
 import br.com.bipos.smartposapi.user.AppUserRepository
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import java.time.LocalDate
 
 @RestController
 @RequestMapping("/pos/sales")
@@ -42,5 +46,17 @@ class SaleController(
             status = sale.status
         )
     }
-}
 
+    @GetMapping("/daily-report")
+    fun getDailyReport(
+        @RequestParam(required = false) date: LocalDate?
+    ): DailySalesReportResponse {
+        val companyId = companyService.getCurrentCompany().id
+            ?: throw ResourceNotFoundException("Empresa não encontrada")
+
+        return saleService.getDailyReport(
+            companyId = companyId,
+            reportDate = date ?: LocalDate.now()
+        )
+    }
+}
