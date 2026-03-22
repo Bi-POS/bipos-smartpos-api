@@ -1,9 +1,12 @@
 package br.com.bipos.smartposapi.sale
 
 import br.com.bipos.smartposapi.auth.PosAuthContext
+import br.com.bipos.smartposapi.comanda.dto.CloseComandaRequest
 import br.com.bipos.smartposapi.domain.catalog.Payment
+import br.com.bipos.smartposapi.domain.catalog.Product
 import br.com.bipos.smartposapi.domain.catalog.Sale
 import br.com.bipos.smartposapi.domain.catalog.SaleItem
+import br.com.bipos.smartposapi.domain.comanda.ComandaSession
 import br.com.bipos.smartposapi.domain.company.Company
 import br.com.bipos.smartposapi.payment.PaymentMethod
 import br.com.bipos.smartposapi.payment.PaymentStatus
@@ -41,11 +44,7 @@ class SaleService(
             throw IllegalArgumentException("Venda sem itens")
         }
 
-        /* =========================
-           Buscar produtos
-           ========================= */
         val productIds = request.items.map { it.productId }
-
         val products = productRepository
             .findAllById(productIds)
             .associateBy { it.id }
@@ -54,9 +53,6 @@ class SaleService(
             throw IllegalArgumentException("Produto inválido na venda")
         }
 
-        /* =========================
-           Criar SALE
-           ========================= */
         val sale = Sale(
             company = company,
             totalAmount = BigDecimal.ZERO
@@ -64,9 +60,6 @@ class SaleService(
 
         sale.status = SaleStatus.CREATED
 
-        /* =========================
-           Criar itens
-           ========================= */
         request.items.forEach { itemReq ->
             val product = products[itemReq.productId]
                 ?: throw IllegalArgumentException("Produto não encontrado")
@@ -74,35 +67,19 @@ class SaleService(
             val quantity = itemReq.quantity.takeIf { it > 0 }
                 ?: throw IllegalArgumentException("Quantidade inválida")
 
-            val subtotal = product.price.multiply(BigDecimal(quantity))
-
-            sale.items.add(
-                SaleItem(
-                    sale = sale,
-                    product = product,
-                    quantity = quantity,
-                    unitPrice = product.price,
-                    subtotal = subtotal
-                )
+            appendItem(
+                sale = sale,
+                product = product,
+                quantity = quantity,
+                unitPrice = product.price
             )
-
-            sale.totalAmount += subtotal
         }
 
-        /* =========================
-           Pagamento
-           ========================= */
-        sale.status = SaleStatus.PENDING_PAYMENT
-
-        val payment = Payment(
+        return finalizeSale(
+            auth = auth,
             sale = sale,
-            method = request.paymentMethod,
+            paymentMethod = request.paymentMethod,
             amount = request.amount,
-            status = PaymentStatus.PAID,
-            posSerial = auth.serialNumber,
-            user = auth.user,
-            paidAt = LocalDateTime.now(),
-
             nsu = request.nsu,
             authorizationCode = request.authorizationCode,
             cardBrand = request.cardBrand,
@@ -111,24 +88,52 @@ class SaleService(
             hostMessage = request.hostMessage,
             acquirerResponse = request.acquirerResponse
         )
+    }
 
-        sale.payments.add(payment)
-        sale.status = SaleStatus.COMPLETED
-
-        val savedSale = saleRepository.save(sale)
-
-        /* =========================
-           Estoque
-           ========================= */
-        savedSale.items.forEach { item ->
-            stockService.decreaseStockIfExists(
-                product = item.product,
-                quantity = item.quantity,
-                referenceId = savedSale.id!!
-            )
+    @Transactional
+    fun createSaleFromComanda(
+        auth: PosAuthContext,
+        company: Company,
+        comanda: ComandaSession,
+        request: CloseComandaRequest
+    ): Sale {
+        if (comanda.items.isEmpty()) {
+            throw IllegalArgumentException("Comanda sem itens")
         }
 
-        return savedSale
+        val sale = Sale(
+            company = company,
+            totalAmount = BigDecimal.ZERO
+        )
+
+        sale.status = SaleStatus.CREATED
+
+        comanda.items.forEach { item ->
+            sale.items.add(
+                SaleItem(
+                    sale = sale,
+                    product = item.product,
+                    quantity = item.quantity,
+                    unitPrice = item.unitPrice,
+                    subtotal = item.subtotal
+                )
+            )
+            sale.totalAmount += item.subtotal
+        }
+
+        return finalizeSale(
+            auth = auth,
+            sale = sale,
+            paymentMethod = request.paymentMethod,
+            amount = request.amount,
+            nsu = request.nsu,
+            authorizationCode = request.authorizationCode,
+            cardBrand = request.cardBrand,
+            cardNumberMasked = request.cardNumberMasked,
+            installments = request.installments,
+            hostMessage = request.hostMessage,
+            acquirerResponse = request.acquirerResponse
+        )
     }
 
     @Transactional
@@ -208,5 +213,74 @@ class SaleService(
             topProducts = topProducts,
             recentSales = recentSales
         )
+    }
+
+    private fun appendItem(
+        sale: Sale,
+        product: Product,
+        quantity: Int,
+        unitPrice: BigDecimal
+    ) {
+        val subtotal = unitPrice.multiply(BigDecimal(quantity))
+
+        sale.items.add(
+            SaleItem(
+                sale = sale,
+                product = product,
+                quantity = quantity,
+                unitPrice = unitPrice,
+                subtotal = subtotal
+            )
+        )
+
+        sale.totalAmount += subtotal
+    }
+
+    private fun finalizeSale(
+        auth: PosAuthContext,
+        sale: Sale,
+        paymentMethod: PaymentMethod,
+        amount: BigDecimal,
+        nsu: String?,
+        authorizationCode: String?,
+        cardBrand: String?,
+        cardNumberMasked: String?,
+        installments: Int,
+        hostMessage: String?,
+        acquirerResponse: String?
+    ): Sale {
+        sale.status = SaleStatus.PENDING_PAYMENT
+
+        val payment = Payment(
+            sale = sale,
+            method = paymentMethod,
+            amount = amount,
+            status = PaymentStatus.PAID,
+            posSerial = auth.serialNumber,
+            user = auth.user,
+            paidAt = LocalDateTime.now(),
+            nsu = nsu,
+            authorizationCode = authorizationCode,
+            cardBrand = cardBrand,
+            cardNumberMasked = cardNumberMasked,
+            installments = installments,
+            hostMessage = hostMessage,
+            acquirerResponse = acquirerResponse
+        )
+
+        sale.payments.add(payment)
+        sale.status = SaleStatus.COMPLETED
+
+        val savedSale = saleRepository.save(sale)
+
+        savedSale.items.forEach { item ->
+            stockService.decreaseStockIfExists(
+                product = item.product,
+                quantity = item.quantity,
+                referenceId = savedSale.id!!
+            )
+        }
+
+        return savedSale
     }
 }

@@ -6,7 +6,9 @@ import br.com.bipos.smartposapi.domain.company.CompanyStatus
 import br.com.bipos.smartposapi.domain.companymodule.CompanyModule
 import br.com.bipos.smartposapi.domain.module.Module
 import br.com.bipos.smartposapi.domain.module.ModuleType
+import br.com.bipos.smartposapi.domain.settings.SmartPosSaleOperationMode
 import br.com.bipos.smartposapi.domain.utils.DocumentType
+import br.com.bipos.smartposapi.settings.SmartPosSettingsRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
@@ -16,7 +18,8 @@ import java.util.UUID
 
 class PosBootstrapServiceTest {
     private val companyRepository: CompanyRepository = mock()
-    private val service = PosBootstrapService(companyRepository)
+    private val settingsRepository: SmartPosSettingsRepository = mock()
+    private val service = PosBootstrapService(companyRepository, settingsRepository)
 
     @Test
     fun `bootstrap reflects authenticated company data`() {
@@ -32,6 +35,7 @@ class PosBootstrapServiceTest {
         }
 
         whenever(companyRepository.findById(COMPANY_ID)).thenReturn(Optional.of(company))
+        whenever(settingsRepository.findByCompanyId(COMPANY_ID)).thenReturn(Optional.empty())
 
         val response = service.bootstrap(
             companyId = COMPANY_ID,
@@ -43,6 +47,7 @@ class PosBootstrapServiceTest {
         assertThat(response.logoUrl).isEqualTo("https://cdn.bipos.com/logo.png")
         assertThat(response.stockEnabled).isTrue()
         assertThat(response.serialNumber).isEqualTo(SERIAL_NUMBER)
+        assertThat(response.saleOperationMode).isEqualTo(SmartPosSaleOperationMode.DIRECT.name)
         assertThat(response.modules.map { it.code }).containsExactly("SALE", "SCHOOL")
         assertThat(response.modules.map { it.name }).containsExactly("Vendas", "Escola")
     }

@@ -8,5 +8,6 @@ data class PosBootstrapResponse(
     val logoUrl: String?,
     val stockEnabled: Boolean,
     val serialNumber: String,
+    val saleOperationMode: String,
     val modules: List<PosModuleDTO>
 )

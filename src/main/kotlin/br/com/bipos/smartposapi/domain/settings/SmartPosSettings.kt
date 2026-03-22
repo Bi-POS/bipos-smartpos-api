@@ -1,4 +1,3 @@
-// domain/settings/SmartPosSettings.kt
 package br.com.bipos.smartposapi.domain.settings
 
 import jakarta.persistence.*
@@ -17,7 +16,10 @@ class SmartPosSettings(
     @Column(nullable = false, unique = true)
     val companyId: UUID,
 
-    // ===== IMPRESSÃO =====
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    var saleOperationMode: SmartPosSaleOperationMode = SmartPosSaleOperationMode.DIRECT,
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     var print: SmartPosPrint = SmartPosPrint.FULL,
@@ -28,7 +30,6 @@ class SmartPosSettings(
     @Column(nullable = true, length = 500)
     var logoUrl: String? = null,
 
-    // ===== SEGURANÇA =====
     @Column(nullable = false)
     var securityEnabled: Boolean = false,
 
@@ -41,7 +42,6 @@ class SmartPosSettings(
     @Column(nullable = true)
     var lastPinChange: LocalDateTime? = null,
 
-    // ===== COMPORTAMENTO =====
     @Column(nullable = false)
     var autoLogoutMinutes: Int = 5,
 
@@ -51,7 +51,6 @@ class SmartPosSettings(
     @Column(nullable = false)
     var soundEnabled: Boolean = true,
 
-    // ===== CONTROLE =====
     @Column(nullable = false)
     val createdAt: LocalDateTime = LocalDateTime.now(),
 

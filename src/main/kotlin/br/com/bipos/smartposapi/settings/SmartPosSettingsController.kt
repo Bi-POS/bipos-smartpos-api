@@ -102,6 +102,7 @@ class SmartPosSettingsController(
 
     private fun SmartPosSettings.toResponse(): SmartPosSettingsResponse =
         SmartPosSettingsResponse(
+            saleOperationMode = saleOperationMode.name,
             printType = print.name,
             printLogo = printLogo,
             logoConfigured = !logoUrl.isNullOrBlank(),

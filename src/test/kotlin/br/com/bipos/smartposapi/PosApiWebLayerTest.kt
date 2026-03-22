@@ -15,6 +15,16 @@ import br.com.bipos.smartposapi.auth.refresh.PosRefreshToken
 import br.com.bipos.smartposapi.auth.refresh.PosRefreshTokenService
 import br.com.bipos.smartposapi.bootstrap.PosBootstrapController
 import br.com.bipos.smartposapi.bootstrap.PosBootstrapService
+import br.com.bipos.smartposapi.comanda.ComandaController
+import br.com.bipos.smartposapi.comanda.ComandaService
+import br.com.bipos.smartposapi.comanda.dto.AddComandaItemRequest
+import br.com.bipos.smartposapi.comanda.dto.ComandaDetailResponse
+import br.com.bipos.smartposapi.comanda.dto.ComandaItemResponse
+import br.com.bipos.smartposapi.comanda.dto.ComandaOverviewResponse
+import br.com.bipos.smartposapi.comanda.dto.ComandaSummaryResponse
+import br.com.bipos.smartposapi.comanda.dto.ComandaTableResponse
+import br.com.bipos.smartposapi.comanda.dto.OpenComandaRequest
+import br.com.bipos.smartposapi.comanda.dto.CloseComandaRequest
 import br.com.bipos.smartposapi.bootstrap.dto.PosBootstrapResponse
 import br.com.bipos.smartposapi.bootstrap.dto.PosModuleDTO
 import br.com.bipos.smartposapi.company.CompanyRepository
@@ -25,6 +35,7 @@ import br.com.bipos.smartposapi.domain.catalog.Sale
 import br.com.bipos.smartposapi.domain.company.Company
 import br.com.bipos.smartposapi.domain.company.CompanyStatus
 import br.com.bipos.smartposapi.domain.settings.SmartPosPrint
+import br.com.bipos.smartposapi.domain.settings.SmartPosSaleOperationMode
 import br.com.bipos.smartposapi.domain.settings.SmartPosSettings
 import br.com.bipos.smartposapi.domain.user.AppUser
 import br.com.bipos.smartposapi.domain.user.UserRole
@@ -135,6 +146,9 @@ class PosApiWebLayerTest(
     private lateinit var bootstrapService: PosBootstrapService
 
     @MockBean
+    private lateinit var comandaService: ComandaService
+
+    @MockBean
     private lateinit var companyRepository: CompanyRepository
 
     @MockBean
@@ -169,7 +183,6 @@ class PosApiWebLayerTest(
 
     @MockBean
     private lateinit var smartPosQrTokenRepository: SmartPosQrTokenRepository
-
     @Test
     fun `POST pos auth login returns token and snapshots`() {
         val response = authResponse()
@@ -405,6 +418,7 @@ class PosApiWebLayerTest(
                 logoUrl = "https://cdn.bipos.com/logo.png",
                 stockEnabled = true,
                 serialNumber = SERIAL_NUMBER,
+                saleOperationMode = SmartPosSaleOperationMode.DIRECT.name,
                 modules = listOf(
                     PosModuleDTO(
                         code = "SALE",
@@ -424,6 +438,7 @@ class PosApiWebLayerTest(
             .andExpect(jsonPath("$.logoUrl").value("https://cdn.bipos.com/logo.png"))
             .andExpect(jsonPath("$.stockEnabled").value(true))
             .andExpect(jsonPath("$.serialNumber").value(SERIAL_NUMBER))
+            .andExpect(jsonPath("$.saleOperationMode").value(SmartPosSaleOperationMode.DIRECT.name))
             .andExpect(jsonPath("$.modules[0].code").value("SALE"))
             .andExpect(jsonPath("$.modules[0].name").value("Vendas"))
 
@@ -554,6 +569,7 @@ class PosApiWebLayerTest(
                 .header("Authorization", "Bearer $VALID_TOKEN")
         )
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.saleOperationMode").value(SmartPosSaleOperationMode.DIRECT.name))
             .andExpect(jsonPath("$.printType").value(SmartPosPrint.SHORT.name))
             .andExpect(jsonPath("$.printLogo").value(true))
             .andExpect(jsonPath("$.logoConfigured").value(true))
@@ -571,6 +587,7 @@ class PosApiWebLayerTest(
         stubValidPosToken()
 
         val request = UpdateSmartPosSettingsRequest(
+            saleOperationMode = SmartPosSaleOperationMode.HYBRID.name,
             printType = SmartPosPrint.SHORT.name,
             printLogo = true,
             logoUrl = "https://cdn.bipos.com/logo.png",
@@ -582,6 +599,7 @@ class PosApiWebLayerTest(
 
         given(settingsService.updateSettings(COMPANY_ID, request)).willReturn(
             smartPosSettings(
+                saleOperationMode = SmartPosSaleOperationMode.HYBRID,
                 print = SmartPosPrint.SHORT,
                 printLogo = true,
                 logoUrl = "https://cdn.bipos.com/logo.png",
@@ -600,6 +618,7 @@ class PosApiWebLayerTest(
                 .content(objectMapper.writeValueAsString(request))
         )
             .andExpect(status().isOk)
+            .andExpect(jsonPath("$.saleOperationMode").value(SmartPosSaleOperationMode.HYBRID.name))
             .andExpect(jsonPath("$.printType").value(SmartPosPrint.SHORT.name))
             .andExpect(jsonPath("$.printLogo").value(true))
             .andExpect(jsonPath("$.securityEnabled").value(true))
@@ -634,6 +653,181 @@ class PosApiWebLayerTest(
         verify(settingsService).updatePin(COMPANY_ID, "1234")
     }
 
+    @Test
+    fun `GET pos commandas returns overview for authenticated company`() {
+        stubValidPosToken()
+        val comandaId = UUID.fromString("1d86697d-d115-4c8b-a596-d2fd3a3ca6d0")
+        val tableId = UUID.fromString("d1f9ef45-452e-4e1b-9528-c36b9d8e09cf")
+
+        given(comandaService.getOverview(any())).willReturn(
+            ComandaOverviewResponse(
+                tables = listOf(
+                    ComandaTableResponse(
+                        id = tableId,
+                        name = "Mesa 1",
+                        sortOrder = 1,
+                        openComanda = ComandaSummaryResponse(
+                            id = comandaId,
+                            label = "Mesa 1",
+                            tableId = tableId,
+                            tableName = "Mesa 1",
+                            customerName = null,
+                            itemCount = 3,
+                            totalAmount = BigDecimal("45.00"),
+                            updatedAt = LocalDateTime.of(2026, 3, 22, 20, 10)
+                        )
+                    )
+                ),
+                openCommandas = listOf(
+                    ComandaSummaryResponse(
+                        id = comandaId,
+                        label = "Mesa 1",
+                        tableId = tableId,
+                        tableName = "Mesa 1",
+                        customerName = null,
+                        itemCount = 3,
+                        totalAmount = BigDecimal("45.00"),
+                        updatedAt = LocalDateTime.of(2026, 3, 22, 20, 10)
+                    )
+                )
+            )
+        )
+        given(companyService.getCurrentCompany()).willReturn(company())
+
+        mockMvc.perform(
+            get("/pos/commandas")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.tables[0].name").value("Mesa 1"))
+            .andExpect(jsonPath("$.tables[0].openComanda.id").value(comandaId.toString()))
+            .andExpect(jsonPath("$.openCommandas[0].itemCount").value(3))
+
+        verify(comandaService).getOverview(any())
+    }
+
+    @Test
+    fun `POST pos commandas opens a comanda for the authenticated company`() {
+        stubValidPosToken()
+        val comandaId = UUID.fromString("6a22f4a4-c29d-4d5d-af6a-8cf8c36ec1e3")
+        val tableId = UUID.fromString("d1f9ef45-452e-4e1b-9528-c36b9d8e09cf")
+        val request = OpenComandaRequest(tableId = tableId)
+
+        given(companyService.getCurrentCompany()).willReturn(company())
+        given(userRepository.findByIdAndActiveTrue(USER_ID)).willReturn(appUser())
+        given(comandaService.openComanda(any(), any(), any())).willReturn(
+            ComandaDetailResponse(
+                id = comandaId,
+                label = "Mesa 1",
+                tableId = tableId,
+                tableName = "Mesa 1",
+                customerName = null,
+                status = "OPEN",
+                itemCount = 0,
+                totalAmount = BigDecimal.ZERO,
+                openedAt = LocalDateTime.of(2026, 3, 22, 20, 15),
+                updatedAt = LocalDateTime.of(2026, 3, 22, 20, 15),
+                items = emptyList()
+            )
+        )
+
+        mockMvc.perform(
+            post("/pos/commandas")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(comandaId.toString()))
+            .andExpect(jsonPath("$.tableName").value("Mesa 1"))
+            .andExpect(jsonPath("$.status").value("OPEN"))
+
+        verify(comandaService).openComanda(any(), any(), any())
+    }
+
+    @Test
+    fun `POST pos commandas items adds product to the current comanda`() {
+        stubValidPosToken()
+        val comandaId = UUID.fromString("6a22f4a4-c29d-4d5d-af6a-8cf8c36ec1e3")
+        val itemId = UUID.fromString("29460f8d-7dd8-43d0-8f6a-7d6f47d3083c")
+        val productId = UUID.fromString("b5f8dcfe-8856-4e33-b1fc-27053fa9547f")
+        val request = AddComandaItemRequest(productId = productId, quantity = 2)
+
+        given(companyService.getCurrentCompany()).willReturn(company())
+        given(comandaService.addItem(COMPANY_ID, comandaId, request)).willReturn(
+            ComandaDetailResponse(
+                id = comandaId,
+                label = "Mesa 1",
+                tableId = null,
+                tableName = null,
+                customerName = null,
+                status = "OPEN",
+                itemCount = 2,
+                totalAmount = BigDecimal("30.00"),
+                openedAt = LocalDateTime.of(2026, 3, 22, 20, 15),
+                updatedAt = LocalDateTime.of(2026, 3, 22, 20, 20),
+                items = listOf(
+                    ComandaItemResponse(
+                        id = itemId,
+                        productId = productId,
+                        productName = "Arroz",
+                        imageUrl = null,
+                        unitType = "UNIT",
+                        quantity = 2,
+                        unitPrice = BigDecimal("15.00"),
+                        subtotal = BigDecimal("30.00")
+                    )
+                )
+            )
+        )
+
+        mockMvc.perform(
+            post("/pos/commandas/$comandaId/items")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.itemCount").value(2))
+            .andExpect(jsonPath("$.items[0].productName").value("Arroz"))
+            .andExpect(jsonPath("$.items[0].subtotal").value(30.00))
+
+        verify(comandaService).addItem(COMPANY_ID, comandaId, request)
+    }
+    @Test
+    fun `POST pos commandas close converts comanda into sale`() {
+        stubValidPosToken()
+        val comandaId = UUID.fromString("6a22f4a4-c29d-4d5d-af6a-8cf8c36ec1e3")
+        val request = CloseComandaRequest(
+            paymentMethod = PaymentMethod.PIX,
+            amount = BigDecimal("30.00"),
+            nsu = "123456",
+            authorizationCode = "ABC123"
+        )
+
+        given(companyService.getCurrentCompany()).willReturn(company())
+        given(userRepository.findByIdAndActiveTrue(USER_ID)).willReturn(appUser())
+        given(comandaService.closeComanda(any(), any(), any(), any())).willReturn(
+            br.com.bipos.smartposapi.sale.dto.SaleResponse(
+                id = UUID.fromString("0fe17d76-574f-45bb-83f5-040658e5f2fe").toString(),
+                totalAmount = BigDecimal("30.00"),
+                status = SaleStatus.COMPLETED
+            )
+        )
+
+        mockMvc.perform(
+            post("/pos/commandas/$comandaId/close")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value("0fe17d76-574f-45bb-83f5-040658e5f2fe"))
+            .andExpect(jsonPath("$.totalAmount").value(30.00))
+            .andExpect(jsonPath("$.status").value(SaleStatus.COMPLETED.name))
+
+        verify(comandaService).closeComanda(any(), any(), any(), any())
+    }
     private fun stubValidPosToken() {
         given(jwtService.isTokenExpired(VALID_TOKEN)).willReturn(false)
         given(jwtService.extractType(VALID_TOKEN)).willReturn("POS")
@@ -699,6 +893,7 @@ class PosApiWebLayerTest(
     )
 
     private fun smartPosSettings(
+        saleOperationMode: SmartPosSaleOperationMode = SmartPosSaleOperationMode.DIRECT,
         print: SmartPosPrint = SmartPosPrint.FULL,
         printLogo: Boolean = false,
         logoUrl: String? = null,
@@ -709,6 +904,7 @@ class PosApiWebLayerTest(
         soundEnabled: Boolean = true
     ) = SmartPosSettings(
         companyId = COMPANY_ID,
+        saleOperationMode = saleOperationMode,
         print = print,
         printLogo = printLogo,
         logoUrl = logoUrl,
@@ -754,6 +950,7 @@ class PosApiWebLayerTest(
         PosBootstrapController::class,
         SaleController::class,
         SmartPosSettingsController::class,
+        ComandaController::class,
         SecurityConfig::class,
         PosJwtAuthenticationFilter::class,
         SecurityErrorResponseWriter::class,
@@ -761,6 +958,22 @@ class PosApiWebLayerTest(
     )
     open class TestApplication
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

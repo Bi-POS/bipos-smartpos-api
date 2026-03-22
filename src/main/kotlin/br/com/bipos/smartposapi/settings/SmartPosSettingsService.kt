@@ -1,7 +1,7 @@
-// service/SmartPosSettingsService.kt
 package br.com.bipos.smartposapi.settings
 
 import br.com.bipos.smartposapi.domain.settings.SmartPosPrint
+import br.com.bipos.smartposapi.domain.settings.SmartPosSaleOperationMode
 import br.com.bipos.smartposapi.domain.settings.SmartPosSettings
 import br.com.bipos.smartposapi.exception.BusinessException
 import br.com.bipos.smartposapi.exception.ResourceNotFoundException
@@ -51,6 +51,7 @@ class SmartPosSettingsService(
     ): SmartPosSettings {
         val settings = getOrCreateSettings(companyId)
 
+        request.saleOperationMode?.let { settings.saleOperationMode = parseOperationMode(it) }
         request.printType?.let { settings.print = parsePrintType(it) }
         request.printLogo?.let { settings.printLogo = it }
         request.logoUrl?.let { settings.logoUrl = it.ifBlank { null } }
@@ -117,6 +118,12 @@ class SmartPosSettingsService(
         return settings.soundEnabled
     }
 
+    fun resolveOperationMode(companyId: UUID): SmartPosSaleOperationMode {
+        return repository.findByCompanyId(companyId)
+            .map { it.saleOperationMode }
+            .orElse(SmartPosSaleOperationMode.DIRECT)
+    }
+
     private fun getOrCreateSettings(companyId: UUID): SmartPosSettings {
         return repository.findByCompanyId(companyId)
             .orElseGet { SmartPosSettings(companyId = companyId) }
@@ -127,6 +134,14 @@ class SmartPosSettingsService(
             SmartPosPrint.valueOf(value.uppercase())
         } catch (_: IllegalArgumentException) {
             throw BusinessException("Tipo de impressão inválido")
+        }
+    }
+
+    private fun parseOperationMode(value: String): SmartPosSaleOperationMode {
+        return try {
+            SmartPosSaleOperationMode.valueOf(value.uppercase())
+        } catch (_: IllegalArgumentException) {
+            throw BusinessException("Modo de operação inválido")
         }
     }
 

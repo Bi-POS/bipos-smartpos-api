@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 
 data class SmartPosSettingsResponse(
+    val saleOperationMode: String,
     val printType: String,
     val printLogo: Boolean,
     val logoConfigured: Boolean,
@@ -46,6 +47,7 @@ data class PinValidationRequest(
 )
 
 data class UpdateSmartPosSettingsRequest(
+    val saleOperationMode: String? = null,
     val printType: String? = null,
     val printLogo: Boolean? = null,
     val logoUrl: String? = null,
