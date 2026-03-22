@@ -2,7 +2,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bipos}
     username: ${SPRING_DATASOURCE_USERNAME:bipos_user}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    password: ${SPRING_DATASOURCE_PASSWORD:Bipos@123}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -31,7 +31,7 @@ pos:
 security:
   jwt:
     pos:
-      secret: ${JWT_SECRET_POS}
+      secret: ${JWT_SECRET_POS:gx7ow6V8/zS3n53u540FcFsFGTGpVz85Y1dXDFNLMDyZsFEQMKvgL4pHMEV9is2zm++BXV/QYppVZ3DZLYBugw==}
       expiration: ${JWT_EXPIRATION_POS:900000}
 
 server:

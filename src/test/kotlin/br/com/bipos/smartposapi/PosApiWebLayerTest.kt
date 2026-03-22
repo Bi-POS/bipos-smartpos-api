@@ -25,6 +25,7 @@ import br.com.bipos.smartposapi.domain.catalog.Sale
 import br.com.bipos.smartposapi.domain.company.Company
 import br.com.bipos.smartposapi.domain.company.CompanyStatus
 import br.com.bipos.smartposapi.domain.settings.SmartPosPrint
+import br.com.bipos.smartposapi.domain.settings.SmartPosSettings
 import br.com.bipos.smartposapi.domain.user.AppUser
 import br.com.bipos.smartposapi.domain.user.UserRole
 import br.com.bipos.smartposapi.exception.ApiExceptionHandler
@@ -50,6 +51,7 @@ import br.com.bipos.smartposapi.security.SecurityConfig
 import br.com.bipos.smartposapi.settings.SmartPosSettingsController
 import br.com.bipos.smartposapi.settings.SmartPosSettingsRepository
 import br.com.bipos.smartposapi.settings.SmartPosSettingsService
+import br.com.bipos.smartposapi.settings.dto.UpdateSmartPosSettingsRequest
 import br.com.bipos.smartposapi.stock.StockMovementRepository
 import br.com.bipos.smartposapi.stock.StockRepository
 import br.com.bipos.smartposapi.terminal.PosTerminalRepository
@@ -72,7 +74,9 @@ import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.mockito.kotlin.any
@@ -453,6 +457,107 @@ class PosApiWebLayerTest(
             .andExpect(jsonPath("$.path").value("/pos/settings/print-type"))
     }
 
+    @Test
+    fun `GET pos settings returns consolidated settings for authenticated company`() {
+        stubValidPosToken()
+        given(settingsService.getSettings(COMPANY_ID)).willReturn(
+            smartPosSettings(
+                print = SmartPosPrint.SHORT,
+                printLogo = true,
+                logoUrl = "https://cdn.bipos.com/logo.png",
+                securityEnabled = true,
+                pinHash = "encoded-pin",
+                autoLogoutMinutes = 15,
+                darkMode = true,
+                soundEnabled = false
+            )
+        )
+
+        mockMvc.perform(
+            get("/pos/settings")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.printType").value(SmartPosPrint.SHORT.name))
+            .andExpect(jsonPath("$.printLogo").value(true))
+            .andExpect(jsonPath("$.logoConfigured").value(true))
+            .andExpect(jsonPath("$.securityEnabled").value(true))
+            .andExpect(jsonPath("$.hasPin").value(true))
+            .andExpect(jsonPath("$.autoLogoutMinutes").value(15))
+            .andExpect(jsonPath("$.darkMode").value(true))
+            .andExpect(jsonPath("$.soundEnabled").value(false))
+
+        verify(settingsService).getSettings(COMPANY_ID)
+    }
+
+    @Test
+    fun `PATCH pos settings updates settings using authenticated company id`() {
+        stubValidPosToken()
+
+        val request = UpdateSmartPosSettingsRequest(
+            printType = SmartPosPrint.SHORT.name,
+            printLogo = true,
+            logoUrl = "https://cdn.bipos.com/logo.png",
+            securityEnabled = true,
+            autoLogoutMinutes = 20,
+            darkMode = true,
+            soundEnabled = false
+        )
+
+        given(settingsService.updateSettings(COMPANY_ID, request)).willReturn(
+            smartPosSettings(
+                print = SmartPosPrint.SHORT,
+                printLogo = true,
+                logoUrl = "https://cdn.bipos.com/logo.png",
+                securityEnabled = true,
+                pinHash = "encoded-pin",
+                autoLogoutMinutes = 20,
+                darkMode = true,
+                soundEnabled = false
+            )
+        )
+
+        mockMvc.perform(
+            patch("/pos/settings")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.printType").value(SmartPosPrint.SHORT.name))
+            .andExpect(jsonPath("$.printLogo").value(true))
+            .andExpect(jsonPath("$.securityEnabled").value(true))
+            .andExpect(jsonPath("$.autoLogoutMinutes").value(20))
+            .andExpect(jsonPath("$.darkMode").value(true))
+            .andExpect(jsonPath("$.soundEnabled").value(false))
+
+        verify(settingsService).updateSettings(COMPANY_ID, request)
+    }
+
+    @Test
+    fun `PUT pos settings pin updates pin using authenticated company id`() {
+        stubValidPosToken()
+        given(settingsService.updatePin(COMPANY_ID, "1234")).willReturn(
+            smartPosSettings(
+                securityEnabled = true,
+                pinHash = "encoded-pin"
+            )
+        )
+
+        mockMvc.perform(
+            put("/pos/settings/pin")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"pin":"1234"}""")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.securityEnabled").value(true))
+            .andExpect(jsonPath("$.hasPin").value(true))
+            .andExpect(jsonPath("$.message").value("PIN atualizado com sucesso"))
+
+        verify(settingsService).updatePin(COMPANY_ID, "1234")
+    }
+
     private fun stubValidPosToken() {
         given(jwtService.isTokenExpired(VALID_TOKEN)).willReturn(false)
         given(jwtService.extractType(VALID_TOKEN)).willReturn("POS")
@@ -515,6 +620,28 @@ class PosApiWebLayerTest(
         company = company,
         active = true,
         posVersion = "1.0.0"
+    )
+
+    private fun smartPosSettings(
+        print: SmartPosPrint = SmartPosPrint.FULL,
+        printLogo: Boolean = false,
+        logoUrl: String? = null,
+        securityEnabled: Boolean = false,
+        pinHash: String? = null,
+        autoLogoutMinutes: Int = 5,
+        darkMode: Boolean = false,
+        soundEnabled: Boolean = true
+    ) = SmartPosSettings(
+        companyId = COMPANY_ID,
+        print = print,
+        printLogo = printLogo,
+        logoUrl = logoUrl,
+        securityEnabled = securityEnabled,
+        pinHash = pinHash,
+        pinAttempts = 0,
+        autoLogoutMinutes = autoLogoutMinutes,
+        darkMode = darkMode,
+        soundEnabled = soundEnabled
     )
 
     private fun saleRequest() = SaleRequest(
