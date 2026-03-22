@@ -13,6 +13,10 @@ import br.com.bipos.smartposapi.auth.dto.UserSnapshot
 import br.com.bipos.smartposapi.auth.refresh.PosRefreshController
 import br.com.bipos.smartposapi.auth.refresh.PosRefreshToken
 import br.com.bipos.smartposapi.auth.refresh.PosRefreshTokenService
+import br.com.bipos.smartposapi.bootstrap.PosBootstrapController
+import br.com.bipos.smartposapi.bootstrap.PosBootstrapService
+import br.com.bipos.smartposapi.bootstrap.dto.PosBootstrapResponse
+import br.com.bipos.smartposapi.bootstrap.dto.PosModuleDTO
 import br.com.bipos.smartposapi.company.CompanyRepository
 import br.com.bipos.smartposapi.company.CompanyService
 import br.com.bipos.smartposapi.credential.PosDevice
@@ -81,7 +85,11 @@ import java.util.UUID
 
 @SpringBootTest(
     classes = [PosApiWebLayerTest.TestApplication::class],
-    webEnvironment = SpringBootTest.WebEnvironment.MOCK
+    webEnvironment = SpringBootTest.WebEnvironment.MOCK,
+    properties = [
+        "security.jwt.pos.secret=gx7ow6V8/zS3n53u540FcFsFGTGpVz85Y1dXDFNLMDyZsFEQMKvgL4pHMEV9is2zm++BXV/QYppVZ3DZLYBugw==",
+        "security.jwt.pos.expiration=900000"
+    ]
 )
 @AutoConfigureMockMvc(addFilters = true)
 class PosApiWebLayerTest(
@@ -112,6 +120,9 @@ class PosApiWebLayerTest(
 
     @MockBean
     private lateinit var settingsService: SmartPosSettingsService
+
+    @MockBean
+    private lateinit var bootstrapService: PosBootstrapService
 
     @MockBean
     private lateinit var companyRepository: CompanyRepository
@@ -297,6 +308,46 @@ class PosApiWebLayerTest(
         assertThat(capturedAuth.companyId).isEqualTo(COMPANY_ID)
         assertThat(capturedAuth.serialNumber).isEqualTo(SERIAL_NUMBER)
         assertThat(capturedAuth.user.id).isEqualTo(USER_ID)
+    }
+
+    @Test
+    fun `GET pos bootstrap returns structured bootstrap data`() {
+        stubValidPosToken()
+        given(
+            bootstrapService.bootstrap(
+                COMPANY_ID,
+                SERIAL_NUMBER
+            )
+        ).willReturn(
+            PosBootstrapResponse(
+                companyId = COMPANY_ID,
+                companyName = "Bipos",
+                logoUrl = "https://cdn.bipos.com/logo.png",
+                stockEnabled = true,
+                serialNumber = SERIAL_NUMBER,
+                modules = listOf(
+                    PosModuleDTO(
+                        code = "SALE",
+                        name = "Vendas"
+                    )
+                )
+            )
+        )
+
+        mockMvc.perform(
+            get("/pos/bootstrap")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.companyId").value(COMPANY_ID.toString()))
+            .andExpect(jsonPath("$.companyName").value("Bipos"))
+            .andExpect(jsonPath("$.logoUrl").value("https://cdn.bipos.com/logo.png"))
+            .andExpect(jsonPath("$.stockEnabled").value(true))
+            .andExpect(jsonPath("$.serialNumber").value(SERIAL_NUMBER))
+            .andExpect(jsonPath("$.modules[0].code").value("SALE"))
+            .andExpect(jsonPath("$.modules[0].name").value("Vendas"))
+
+        verify(bootstrapService).bootstrap(COMPANY_ID, SERIAL_NUMBER)
     }
 
     @Test
@@ -497,6 +548,7 @@ class PosApiWebLayerTest(
     @Import(
         PosAuthController::class,
         PosRefreshController::class,
+        PosBootstrapController::class,
         SaleController::class,
         SmartPosSettingsController::class,
         SecurityConfig::class,

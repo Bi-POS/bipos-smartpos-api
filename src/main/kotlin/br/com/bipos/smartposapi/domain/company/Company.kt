@@ -10,7 +10,7 @@ import java.util.*
 
 @Entity
 @Table(name = "companies")
-data class Company(
+class Company(
 
     @Id @GeneratedValue(strategy = GenerationType.AUTO) val id: UUID? = null,
 
