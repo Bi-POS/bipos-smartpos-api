@@ -1,6 +1,7 @@
 package br.com.bipos.smartposapi.terminal
 
 import br.com.bipos.smartposapi.exception.InvalidTerminalException
+import br.com.bipos.smartposapi.exception.ResourceNotFoundException
 import org.springframework.stereotype.Service
 import java.util.*
 
@@ -43,10 +44,10 @@ class PosTerminalService(
     ): PosTerminal {
 
         val terminal = repository.findBySerialNumberAndActiveTrue(serialNumber)
-            ?: throw InvalidTerminalException("Terminal não registrado ou inativo")
+            ?: throw ResourceNotFoundException("Terminal não registrado ou inativo")
 
         if (terminal.companyId != companyId) {
-            throw InvalidTerminalException("Terminal não pertence à company")
+            throw InvalidTerminalException("Terminal não pertence à empresa")
         }
 
         return terminal
@@ -57,7 +58,7 @@ class PosTerminalService(
      */
     fun block(serialNumber: String) {
         val terminal = repository.findBySerialNumber(serialNumber)
-            ?: throw InvalidTerminalException("Terminal não encontrado")
+            ?: throw ResourceNotFoundException("Terminal não encontrado")
 
         terminal.active = false
         repository.save(terminal)
@@ -68,7 +69,7 @@ class PosTerminalService(
      */
     fun unblock(serialNumber: String) {
         val terminal = repository.findBySerialNumber(serialNumber)
-            ?: throw InvalidTerminalException("Terminal não encontrado")
+            ?: throw ResourceNotFoundException("Terminal não encontrado")
 
         terminal.active = true
         repository.save(terminal)

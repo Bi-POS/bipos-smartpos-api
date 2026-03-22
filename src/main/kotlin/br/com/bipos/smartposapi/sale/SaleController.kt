@@ -2,6 +2,7 @@ package br.com.bipos.smartposapi.sale
 
 import br.com.bipos.smartposapi.auth.PosAuthContext
 import br.com.bipos.smartposapi.company.CompanyService
+import br.com.bipos.smartposapi.exception.ResourceNotFoundException
 import br.com.bipos.smartposapi.sale.dto.SaleRequest
 import br.com.bipos.smartposapi.sale.dto.SaleResponse
 import br.com.bipos.smartposapi.security.PosSecurityUtils
@@ -27,7 +28,7 @@ class SaleController(
         val principal = PosSecurityUtils.principal()
 
         val user = userRepository.findByIdAndActiveTrue(principal.userId)
-            ?: throw IllegalArgumentException("Usuário inválido")
+            ?: throw ResourceNotFoundException("Usuário não encontrado")
 
         val auth = PosAuthContext(
             user = user,

@@ -24,8 +24,10 @@ import br.com.bipos.smartposapi.domain.settings.SmartPosPrint
 import br.com.bipos.smartposapi.domain.user.AppUser
 import br.com.bipos.smartposapi.domain.user.UserRole
 import br.com.bipos.smartposapi.exception.ApiExceptionHandler
-import br.com.bipos.smartposapi.exception.GlobalExceptionHandler
+import br.com.bipos.smartposapi.exception.BusinessException
 import br.com.bipos.smartposapi.exception.InvalidPosCredentialsException
+import br.com.bipos.smartposapi.exception.InvalidRefreshTokenException
+import br.com.bipos.smartposapi.exception.ResourceNotFoundException
 import br.com.bipos.smartposapi.domain.utils.DocumentType
 import br.com.bipos.smartposapi.payment.PaymentMethod
 import br.com.bipos.smartposapi.payment.PaymentRepository
@@ -38,6 +40,7 @@ import br.com.bipos.smartposapi.sale.dto.SaleRequest
 import br.com.bipos.smartposapi.sale.group.PosSaleGroupRepository
 import br.com.bipos.smartposapi.sale.product.PosSaleProductRepository
 import br.com.bipos.smartposapi.security.PosJwtAuthenticationFilter
+import br.com.bipos.smartposapi.security.SecurityErrorResponseWriter
 import br.com.bipos.smartposapi.security.SecurityConfig
 import br.com.bipos.smartposapi.settings.SmartPosSettingsController
 import br.com.bipos.smartposapi.settings.SmartPosSettingsRepository
@@ -48,7 +51,6 @@ import br.com.bipos.smartposapi.terminal.PosTerminalRepository
 import br.com.bipos.smartposapi.user.AppUserRepository
 import br.com.bipos.smartposapi.login.SmartPosQrTokenRepository
 import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.servlet.http.HttpServletRequest
 import org.junit.jupiter.api.Test
 import org.assertj.core.api.Assertions.assertThat
 import org.mockito.BDDMockito.given
@@ -188,7 +190,10 @@ class PosApiWebLayerTest(
                 .content(objectMapper.writeValueAsString(request))
         )
             .andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.status").value(401))
+            .andExpect(jsonPath("$.error").value("Unauthorized"))
             .andExpect(jsonPath("$.message").value("Credenciais POS inválidas"))
+            .andExpect(jsonPath("$.path").value("/pos/auth/login"))
     }
 
     @Test
@@ -224,15 +229,33 @@ class PosApiWebLayerTest(
     }
 
     @Test
-    fun `POST pos sales requires a valid POS token`() {
-        val request = saleRequest()
+    fun `POST pos auth refresh returns 401 when refresh token is invalid`() {
+        whenever(refreshService.validate("invalid-refresh-token")).thenThrow(InvalidRefreshTokenException())
 
+        mockMvc.perform(
+            post("/pos/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"refreshToken":"invalid-refresh-token"}""")
+        )
+            .andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.status").value(401))
+            .andExpect(jsonPath("$.error").value("Unauthorized"))
+            .andExpect(jsonPath("$.message").value("Refresh token POS inválido"))
+            .andExpect(jsonPath("$.path").value("/pos/auth/refresh"))
+    }
+
+    @Test
+    fun `POST pos sales requires a valid POS token`() {
         mockMvc.perform(
             post("/pos/sales")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
+                .content(objectMapper.writeValueAsString(saleRequest()))
         )
-            .andExpect(status().isForbidden)
+            .andExpect(status().isUnauthorized)
+            .andExpect(jsonPath("$.status").value(401))
+            .andExpect(jsonPath("$.error").value("Unauthorized"))
+            .andExpect(jsonPath("$.message").value("Autenticação POS obrigatória"))
+            .andExpect(jsonPath("$.path").value("/pos/sales"))
     }
 
     @Test
@@ -294,6 +317,42 @@ class PosApiWebLayerTest(
     }
 
     @Test
+    fun `POST pos settings validate pin returns 422 when business rule blocks operation`() {
+        stubValidPosToken()
+        given(settingsService.validatePin(COMPANY_ID, "1234"))
+            .willThrow(BusinessException("PIN bloqueado temporariamente por muitas tentativas"))
+
+        mockMvc.perform(
+            post("/pos/settings/validate-pin")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"pin":"1234"}""")
+        )
+            .andExpect(status().isUnprocessableEntity)
+            .andExpect(jsonPath("$.status").value(422))
+            .andExpect(jsonPath("$.error").value("Unprocessable Entity"))
+            .andExpect(jsonPath("$.message").value("PIN bloqueado temporariamente por muitas tentativas"))
+            .andExpect(jsonPath("$.path").value("/pos/settings/validate-pin"))
+    }
+
+    @Test
+    fun `POST pos settings validate pin returns 400 for invalid request body`() {
+        stubValidPosToken()
+
+        mockMvc.perform(
+            post("/pos/settings/validate-pin")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{}""")
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.status").value(400))
+            .andExpect(jsonPath("$.error").value("Bad Request"))
+            .andExpect(jsonPath("$.message").value("Corpo da requisição inválido"))
+            .andExpect(jsonPath("$.path").value("/pos/settings/validate-pin"))
+    }
+
+    @Test
     fun `legacy companyId settings route is no longer exposed`() {
         stubValidPosToken()
 
@@ -304,6 +363,10 @@ class PosApiWebLayerTest(
                 .content("""{"pin":"1234"}""")
         )
             .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error").value("Not Found"))
+            .andExpect(jsonPath("$.message").value("Recurso não encontrado"))
+            .andExpect(jsonPath("$.path").value("/pos/settings/$COMPANY_ID/validate-pin"))
     }
 
     @Test
@@ -319,6 +382,23 @@ class PosApiWebLayerTest(
             .andExpect(jsonPath("$.printType").value(SmartPosPrint.FULL.name))
 
         verify(settingsService).getPrintType(COMPANY_ID)
+    }
+
+    @Test
+    fun `GET pos settings print type returns 404 when company settings are missing`() {
+        stubValidPosToken()
+        given(settingsService.getPrintType(COMPANY_ID))
+            .willThrow(ResourceNotFoundException("Configurações não encontradas"))
+
+        mockMvc.perform(
+            get("/pos/settings/print-type")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+        )
+            .andExpect(status().isNotFound)
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error").value("Not Found"))
+            .andExpect(jsonPath("$.message").value("Configurações não encontradas"))
+            .andExpect(jsonPath("$.path").value("/pos/settings/print-type"))
     }
 
     private fun stubValidPosToken() {
@@ -416,8 +496,8 @@ class PosApiWebLayerTest(
         SmartPosSettingsController::class,
         SecurityConfig::class,
         PosJwtAuthenticationFilter::class,
+        SecurityErrorResponseWriter::class,
         ApiExceptionHandler::class,
-        GlobalExceptionHandler::class
     )
     open class TestApplication
 }

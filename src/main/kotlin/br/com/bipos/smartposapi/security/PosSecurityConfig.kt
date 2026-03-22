@@ -2,7 +2,7 @@ package br.com.bipos.smartposapi.security
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.core.annotation.Order
+import org.springframework.http.HttpStatus
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -12,7 +12,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableWebSecurity
 class SecurityConfig(
-    private val jwtAuthenticationFilter: PosJwtAuthenticationFilter
+    private val jwtAuthenticationFilter: PosJwtAuthenticationFilter,
+    private val errorResponseWriter: SecurityErrorResponseWriter
 ) {
 
     @Bean
@@ -24,6 +25,26 @@ class SecurityConfig(
 
             .sessionManagement {
                 it.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            }
+
+            .exceptionHandling {
+                it.authenticationEntryPoint { request, response, _ ->
+                    errorResponseWriter.write(
+                        response = response,
+                        status = HttpStatus.UNAUTHORIZED,
+                        message = "Autenticação POS obrigatória",
+                        path = request.requestURI
+                    )
+                }
+
+                it.accessDeniedHandler { request, response, _ ->
+                    errorResponseWriter.write(
+                        response = response,
+                        status = HttpStatus.FORBIDDEN,
+                        message = "Acesso negado",
+                        path = request.requestURI
+                    )
+                }
             }
 
             .authorizeHttpRequests {

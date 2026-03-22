@@ -1,11 +1,10 @@
 package br.com.bipos.smartposapi.security
 
-import br.com.bipos.smartposapi.auth.PosAuthContext
 import br.com.bipos.smartposapi.auth.PosJwtService
-import br.com.bipos.smartposapi.user.AppUserRepository
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.http.HttpStatus
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
@@ -14,7 +13,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 
 @Component
 class PosJwtAuthenticationFilter(
-    private val jwtService: PosJwtService
+    private val jwtService: PosJwtService,
+    private val errorResponseWriter: SecurityErrorResponseWriter
 ) : OncePerRequestFilter() {
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean =
@@ -36,12 +36,24 @@ class PosJwtAuthenticationFilter(
             val token = authHeader.substring(7)
 
             if (jwtService.isTokenExpired(token)) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN)
+                SecurityContextHolder.clearContext()
+                errorResponseWriter.write(
+                    response = response,
+                    status = HttpStatus.UNAUTHORIZED,
+                    message = "Token POS inválido ou expirado",
+                    path = request.requestURI
+                )
                 return
             }
 
             if (jwtService.extractType(token) != "POS") {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN)
+                SecurityContextHolder.clearContext()
+                errorResponseWriter.write(
+                    response = response,
+                    status = HttpStatus.UNAUTHORIZED,
+                    message = "Token POS inválido ou expirado",
+                    path = request.requestURI
+                )
                 return
             }
 
@@ -61,7 +73,12 @@ class PosJwtAuthenticationFilter(
 
         } catch (ex: Exception) {
             SecurityContextHolder.clearContext()
-            response.sendError(HttpServletResponse.SC_FORBIDDEN)
+            errorResponseWriter.write(
+                response = response,
+                status = HttpStatus.UNAUTHORIZED,
+                message = "Token POS inválido ou expirado",
+                path = request.requestURI
+            )
             return
         }
 

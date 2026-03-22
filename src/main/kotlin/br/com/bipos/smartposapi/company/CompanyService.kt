@@ -1,6 +1,7 @@
 package br.com.bipos.smartposapi.company
 
 import br.com.bipos.smartposapi.domain.company.Company
+import br.com.bipos.smartposapi.exception.ResourceNotFoundException
 import br.com.bipos.smartposapi.security.PosSecurityUtils
 import org.springframework.stereotype.Service
 
@@ -13,7 +14,7 @@ class CompanyService(
         val companyId = PosSecurityUtils.companyId()
 
         return companyRepository.findById(companyId)
-            .orElseThrow { RuntimeException("Company não existe") }
+            .orElseThrow { ResourceNotFoundException("Empresa não encontrada") }
     }
 }
 
