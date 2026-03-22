@@ -40,6 +40,7 @@ import br.com.bipos.smartposapi.sale.dto.SaleRequest
 import br.com.bipos.smartposapi.sale.group.PosSaleGroupRepository
 import br.com.bipos.smartposapi.sale.product.PosSaleProductRepository
 import br.com.bipos.smartposapi.security.PosJwtAuthenticationFilter
+import br.com.bipos.smartposapi.security.PosPrincipal
 import br.com.bipos.smartposapi.security.SecurityErrorResponseWriter
 import br.com.bipos.smartposapi.security.SecurityConfig
 import br.com.bipos.smartposapi.settings.SmartPosSettingsController
@@ -213,7 +214,7 @@ class PosApiWebLayerTest(
         )
         given(userRepository.findByIdAndActiveTrue(USER_ID)).willReturn(user)
         given(posDeviceRepository.findBySerialNumberAndActiveTrue(SERIAL_NUMBER)).willReturn(pos)
-        given(jwtService.generateToken(user, pos)).willReturn("new-access-token")
+        given(jwtService.generateAccessToken(user, pos)).willReturn("new-access-token")
 
         mockMvc.perform(
             post("/pos/auth/refresh")
@@ -404,9 +405,13 @@ class PosApiWebLayerTest(
     private fun stubValidPosToken() {
         given(jwtService.isTokenExpired(VALID_TOKEN)).willReturn(false)
         given(jwtService.extractType(VALID_TOKEN)).willReturn("POS")
-        given(jwtService.extractUserId(VALID_TOKEN)).willReturn(USER_ID)
-        given(jwtService.extractCompanyId(VALID_TOKEN)).willReturn(COMPANY_ID)
-        given(jwtService.extractSerialNumber(VALID_TOKEN)).willReturn(SERIAL_NUMBER)
+        given(jwtService.extractPosPrincipal(VALID_TOKEN)).willReturn(
+            PosPrincipal(
+                userId = USER_ID,
+                companyId = COMPANY_ID,
+                serialNumber = SERIAL_NUMBER
+            )
+        )
     }
 
     private fun authResponse() = PosAuthResponse(

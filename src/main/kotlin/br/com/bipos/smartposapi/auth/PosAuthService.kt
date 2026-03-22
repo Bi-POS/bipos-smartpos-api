@@ -3,9 +3,12 @@ package br.com.bipos.smartposapi.auth
 import br.com.bipos.smartposapi.audit.AuditAction
 import br.com.bipos.smartposapi.audit.PosAuditService
 import br.com.bipos.smartposapi.auth.dto.*
+import br.com.bipos.smartposapi.credential.PosDevice
 import br.com.bipos.smartposapi.credential.PosDeviceRepository
+import br.com.bipos.smartposapi.domain.user.AppUser
 import br.com.bipos.smartposapi.exception.InvalidPosCredentialsException
 import br.com.bipos.smartposapi.exception.InvalidQrTokenException
+import br.com.bipos.smartposapi.exception.QrTokenExpiredException
 import br.com.bipos.smartposapi.login.PosQrLoginRequest
 import br.com.bipos.smartposapi.login.SmartPosQrTokenRepository
 import br.com.bipos.smartposapi.user.AppUserRepository
@@ -138,40 +141,7 @@ class PosAuthService(
         )
 
         /* 8️⃣ Gera token POS + USER */
-        val token = jwtService.generateToken(
-            user = user,
-            pos = pos
-        )
-
-        val company = user.company
-            ?: throw IllegalStateException("Usuário sem empresa")
-
-        /* 9️⃣ Retorno */
-        return PosAuthResponse(
-            token = token,
-
-            company = CompanySnapshot(
-                id = company.id.toString(),
-                name = company.name,
-                cnpj = company.document,
-                logoPath = company.logoUrl,
-                email = company.email,
-                phone = company.phone
-            ),
-
-            user = UserSnapshot(
-                id = user.id?.toString(),
-                name = user.name,
-                photoPath = user.photoUrl,
-                email = user.email,
-                role = user.role.name,
-            ),
-
-            pos = PosSnapshot(
-                serialNumber = pos.serialNumber,
-                version = pos.posVersion
-            )
-        )
+        return buildAuthResponse(user, pos)
     }
 
     private fun loginFailed(httpRequest: HttpServletRequest): Nothing {
@@ -210,52 +180,82 @@ class PosAuthService(
         request: PosQrLoginRequest,
         httpRequest: HttpServletRequest
     ): PosAuthResponse {
-
-        println("========== LOGIN POS QR ==========")
-        println("SERIAL: ${request.serialNumber}")
-        println("QR TOKEN: ${request.qrToken}")
+        logger.info(
+            "POS QR login attempt: serial={}, token={}",
+            request.serialNumber,
+            maskToken(request.qrToken)
+        )
 
         val now = Instant.now()
 
-        // 1️⃣ Busca token no banco
         val qrToken = qrTokenRepository
             .findByTokenAndUsedFalse(request.qrToken)
-            ?: throw InvalidQrTokenException()
+            ?: run {
+                logger.warn(
+                    "POS QR login failed: token not found or already used. serial={}, token={}",
+                    request.serialNumber,
+                    maskToken(request.qrToken)
+                )
+                throw InvalidQrTokenException()
+            }
 
-        // 2️⃣ Verifica expiração
         if (qrToken.expiresAt.isBefore(now)) {
-            throw InvalidQrTokenException()
+            logger.warn(
+                "POS QR login failed: token expired. serial={}, token={}, expiresAt={}",
+                request.serialNumber,
+                maskToken(request.qrToken),
+                qrToken.expiresAt
+            )
+            throw QrTokenExpiredException()
         }
 
-        // 3️⃣ Marca token como usado
         qrToken.used = true
         qrTokenRepository.save(qrToken)
 
-        // 4️⃣ Carrega usuário
         val user = userRepository.findById(
             qrToken.userId
         ).orElseThrow {
+            logger.warn(
+                "POS QR login failed: user not found. serial={}, userId={}",
+                request.serialNumber,
+                qrToken.userId
+            )
             InvalidPosCredentialsException()
         }
 
-        // 5️⃣ Carrega POS
         val pos = posDeviceRepository
             .findBySerialNumberAndActiveTrue(request.serialNumber)
-            ?: throw InvalidPosCredentialsException()
+            ?: run {
+                logger.warn(
+                    "POS QR login failed: active POS not found. userId={}, serial={}",
+                    user.id,
+                    request.serialNumber
+                )
+                throw InvalidPosCredentialsException()
+            }
 
-        // 6️⃣ Garante empresa correta
         if (pos.company.id.toString() != qrToken.companyId.toString()) {
+            logger.warn(
+                "POS QR login failed: company mismatch. userId={}, tokenCompanyId={}, posCompanyId={}, serial={}",
+                user.id,
+                qrToken.companyId,
+                pos.company.id,
+                request.serialNumber
+            )
             throw InvalidPosCredentialsException()
         }
 
-        println("✅ LOGIN QR VALIDATED")
+        logger.info(
+            "POS QR login validated. userId={}, companyId={}, serial={}",
+            user.id,
+            pos.company.id,
+            pos.serialNumber
+        )
 
-        // 7️⃣ Atualiza POS
         pos.lastSeenAt = LocalDateTime.now()
         pos.posVersion = request.posVersion
         posDeviceRepository.save(pos)
 
-        // 8️⃣ Auditoria
         auditService.log(
             companyId = pos.company.id,
             action = AuditAction.LOGIN_QR_SUCCESS.name,
@@ -264,16 +264,23 @@ class PosAuthService(
             posVersion = pos.posVersion
         )
 
-        // 9️⃣ Gera JWT POS
-        val token = jwtService.generateToken(
+        return buildAuthResponse(
             user = user,
             pos = pos
         )
+    }
 
+    private fun buildAuthResponse(
+        user: AppUser,
+        pos: PosDevice
+    ): PosAuthResponse {
+        val token = jwtService.generateAccessToken(
+            user = user,
+            pos = pos
+        )
         val company = user.company
             ?: throw IllegalStateException("Usuário sem empresa")
 
-        // 🔟 Retorno padrão
         return PosAuthResponse(
             token = token,
 
@@ -299,6 +306,13 @@ class PosAuthService(
                 version = pos.posVersion
             )
         )
+    }
+
+    private fun maskToken(token: String?): String? {
+        if (token.isNullOrBlank()) return null
+        if (token.length <= 6) return "***"
+
+        return "${token.take(3)}***${token.takeLast(3)}"
     }
 }
 

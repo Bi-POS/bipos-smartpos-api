@@ -3,6 +3,7 @@ package br.com.bipos.smartposapi.auth
 import br.com.bipos.smartposapi.credential.PosDevice
 import br.com.bipos.smartposapi.domain.user.AppUser
 import br.com.bipos.smartposapi.security.PosJwtProperties
+import br.com.bipos.smartposapi.security.PosPrincipal
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
@@ -16,8 +17,15 @@ import java.util.*
 class PosJwtService(
     private val props: PosJwtProperties
 ) {
-    private val POS_TOKEN_VALIDITY_MS = 1000L * 60 * 60 * 2
-
+    companion object {
+        private const val TOKEN_TYPE = "POS"
+        private const val CLAIM_TYPE = "type"
+        private const val CLAIM_COMPANY_ID = "companyId"
+        private const val CLAIM_USER_ID = "userId"
+        private const val CLAIM_SERIAL_NUMBER = "serialNumber"
+        private const val CLAIM_POS_VERSION = "posVersion"
+        private const val CLAIM_ROLE = "role"
+    }
 
     private val key: Key by lazy {
         Keys.hmacShaKeyFor(
@@ -25,28 +33,25 @@ class PosJwtService(
         )
     }
 
-    private val validityMs: Long
-        get() = props.expiration
-
-    // ===============================
-    // TOKEN GENERATION
-    // ===============================
-
-    fun generateToken(
+    fun generateAccessToken(
         user: AppUser,
         pos: PosDevice
     ): String {
+        val userId = user.id
+            ?: throw IllegalStateException("Usuário sem ID")
+        val companyId = user.company?.id
+            ?: throw IllegalStateException("Usuário sem empresa")
         val now = Date()
-        val exp = Date(now.time + POS_TOKEN_VALIDITY_MS)
+        val exp = Date(now.time + props.expiration)
 
         val claims = Jwts.claims().apply {
-            subject = user.id.toString()               // 👤 quem está logado
-            this["type"] = "POS"
-            this["companyId"] = user.company?.id.toString()
-            this["userId"] = user.id.toString()
-            this["serialNumber"] = pos.serialNumber
-            this["posVersion"] = pos.posVersion
-            this["role"] = user.role.name              // OPERATOR, MANAGER, etc
+            subject = userId.toString()
+            this[CLAIM_TYPE] = TOKEN_TYPE
+            this[CLAIM_COMPANY_ID] = companyId.toString()
+            this[CLAIM_USER_ID] = userId.toString()
+            this[CLAIM_SERIAL_NUMBER] = pos.serialNumber
+            this[CLAIM_POS_VERSION] = pos.posVersion
+            this[CLAIM_ROLE] = user.role.name
         }
 
         return Jwts.builder()
@@ -57,11 +62,7 @@ class PosJwtService(
             .compact()
     }
 
-    // ===============================
-    // VALIDATION
-    // ===============================
-
-    fun extractCnpj(token: String): String =
+    fun extractSubject(token: String): String =
         extractClaim(token) { it.subject }
 
     fun isTokenExpired(token: String): Boolean {
@@ -69,15 +70,17 @@ class PosJwtService(
         return expiration.before(Date())
     }
 
-    // ===============================
-    // CLAIMS
-    // ===============================
-
-    fun extractCompanyId(token: String): UUID =
-        UUID.fromString(extractAllClaims(token)["companyId"] as String)
-
     fun extractType(token: String): String =
-        extractAllClaims(token)["type"] as String
+        extractClaim(token) { it[CLAIM_TYPE] as String }
+
+    fun extractPosPrincipal(token: String): PosPrincipal {
+        val claims = extractAllClaims(token)
+        return PosPrincipal(
+            userId = UUID.fromString(claims[CLAIM_USER_ID] as String),
+            companyId = UUID.fromString(claims[CLAIM_COMPANY_ID] as String),
+            serialNumber = claims[CLAIM_SERIAL_NUMBER] as String
+        )
+    }
 
     fun extractAllClaims(token: String): Claims =
         Jwts.parserBuilder()
@@ -86,27 +89,20 @@ class PosJwtService(
             .parseClaimsJws(token)
             .body
 
-    // ===============================
-    // PRIVATE
-    // ===============================
     fun extractUserId(token: String): UUID =
-        UUID.fromString(extractAllClaims(token)["userId"] as String)
+        extractPosPrincipal(token).userId
+
+    fun extractCompanyId(token: String): UUID =
+        extractPosPrincipal(token).companyId
 
     fun extractSerialNumber(token: String): String =
-        extractAllClaims(token)["serialNumber"] as String
+        extractPosPrincipal(token).serialNumber
 
-    fun extractPosVersion(token: String): String =
-        extractAllClaims(token)["posVersion"] as String
+    fun extractPosVersion(token: String): String? =
+        extractAllClaims(token)[CLAIM_POS_VERSION] as String?
 
     private fun <T> extractClaim(token: String, resolver: (Claims) -> T): T {
         val claims = extractAllClaims(token)
         return resolver(claims)
-    }
-
-    fun generatePosToken(
-        user: AppUser,
-        pos: PosDevice
-    ): String {
-        return generateToken(user, pos)
     }
 }

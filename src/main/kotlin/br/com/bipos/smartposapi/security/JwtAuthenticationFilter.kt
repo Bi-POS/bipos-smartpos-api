@@ -4,6 +4,7 @@ import br.com.bipos.smartposapi.auth.PosJwtService
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
@@ -16,6 +17,9 @@ class PosJwtAuthenticationFilter(
     private val jwtService: PosJwtService,
     private val errorResponseWriter: SecurityErrorResponseWriter
 ) : OncePerRequestFilter() {
+    companion object {
+        private val appLogger = LoggerFactory.getLogger(PosJwtAuthenticationFilter::class.java)
+    }
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean =
         request.servletPath.startsWith("/pos/auth")
@@ -37,6 +41,10 @@ class PosJwtAuthenticationFilter(
 
             if (jwtService.isTokenExpired(token)) {
                 SecurityContextHolder.clearContext()
+                appLogger.warn(
+                    "Rejected POS token: expired token for path={}",
+                    request.requestURI
+                )
                 errorResponseWriter.write(
                     response = response,
                     status = HttpStatus.UNAUTHORIZED,
@@ -48,6 +56,10 @@ class PosJwtAuthenticationFilter(
 
             if (jwtService.extractType(token) != "POS") {
                 SecurityContextHolder.clearContext()
+                appLogger.warn(
+                    "Rejected POS token: invalid token type for path={}",
+                    request.requestURI
+                )
                 errorResponseWriter.write(
                     response = response,
                     status = HttpStatus.UNAUTHORIZED,
@@ -57,11 +69,7 @@ class PosJwtAuthenticationFilter(
                 return
             }
 
-            val principal = PosPrincipal(
-                userId = jwtService.extractUserId(token),
-                companyId = jwtService.extractCompanyId(token),
-                serialNumber = jwtService.extractSerialNumber(token)
-            )
+            val principal = jwtService.extractPosPrincipal(token)
 
             val authentication = UsernamePasswordAuthenticationToken(
                 principal,
@@ -73,6 +81,11 @@ class PosJwtAuthenticationFilter(
 
         } catch (ex: Exception) {
             SecurityContextHolder.clearContext()
+            appLogger.warn(
+                "Rejected POS token: failed to parse token for path={}",
+                request.requestURI,
+                ex
+            )
             errorResponseWriter.write(
                 response = response,
                 status = HttpStatus.UNAUTHORIZED,

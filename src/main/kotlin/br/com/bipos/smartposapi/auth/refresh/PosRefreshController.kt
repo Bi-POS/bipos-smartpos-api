@@ -46,7 +46,7 @@ class PosRefreshController(
         }
 
         /* 5️⃣ Gera novo access token */
-        val token = jwtService.generateToken(
+        val token = jwtService.generateAccessToken(
             user = user,
             pos = pos
         )

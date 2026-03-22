@@ -1,6 +1,5 @@
 package br.com.bipos.smartposapi.sale
 
-import br.com.bipos.smartposapi.auth.PosAuthContext
 import br.com.bipos.smartposapi.company.CompanyService
 import br.com.bipos.smartposapi.exception.ResourceNotFoundException
 import br.com.bipos.smartposapi.sale.dto.SaleRequest
@@ -24,17 +23,10 @@ class SaleController(
     fun createSale(
         @RequestBody request: SaleRequest
     ): SaleResponse {
-
-        val principal = PosSecurityUtils.principal()
-
-        val user = userRepository.findByIdAndActiveTrue(principal.userId)
+        val user = userRepository.findByIdAndActiveTrue(PosSecurityUtils.userId())
             ?: throw ResourceNotFoundException("Usuário não encontrado")
 
-        val auth = PosAuthContext(
-            user = user,
-            companyId = principal.companyId,
-            serialNumber = principal.serialNumber
-        )
+        val auth = PosSecurityUtils.authContext(user)
 
         val company = companyService.getCurrentCompany()
 
