@@ -91,6 +91,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
@@ -803,6 +804,22 @@ class PosApiWebLayerTest(
         verify(comandaService).addItem(COMPANY_ID, comandaId, request)
     }
     @Test
+    fun `DELETE pos commandas cancels current comanda`() {
+        stubValidPosToken()
+        val comandaId = UUID.fromString("6a22f4a4-c29d-4d5d-af6a-8cf8c36ec1e3")
+
+        given(companyService.getCurrentCompany()).willReturn(company())
+
+        mockMvc.perform(
+            delete("/pos/commandas/$comandaId")
+                .header("Authorization", "Bearer $VALID_TOKEN")
+        )
+            .andExpect(status().isOk)
+
+        verify(comandaService).deleteComanda(COMPANY_ID, comandaId)
+    }
+
+    @Test
     fun `POST pos commandas close converts comanda into sale`() {
         stubValidPosToken()
         val comandaId = UUID.fromString("6a22f4a4-c29d-4d5d-af6a-8cf8c36ec1e3")
@@ -1011,6 +1028,8 @@ class PosApiWebLayerTest(
     )
     open class TestApplication
 }
+
+
 
 
 
