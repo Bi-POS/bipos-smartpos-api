@@ -1,6 +1,5 @@
 package br.com.bipos.smartposapi.settings
 
-import br.com.bipos.smartposapi.domain.settings.SmartPosSettings
 import br.com.bipos.smartposapi.security.PosSecurityUtils
 import br.com.bipos.smartposapi.settings.dto.AutoLogoutResponse
 import br.com.bipos.smartposapi.settings.dto.DarkModeResponse
@@ -31,7 +30,7 @@ class SmartPosSettingsController(
 ) {
     @GetMapping
     fun getSettings(): SmartPosSettingsResponse =
-        settingsService.getSettings(currentCompanyId()).toResponse()
+        settingsService.getSettings(currentCompanyId())
 
     @GetMapping("/print-type")
     fun getPrintType(): PrintTypeResponse =
@@ -84,7 +83,7 @@ class SmartPosSettingsController(
     fun updateSettings(
         @RequestBody @Valid request: UpdateSmartPosSettingsRequest
     ): SmartPosSettingsResponse =
-        settingsService.updateSettings(currentCompanyId(), request).toResponse()
+        settingsService.updateSettings(currentCompanyId(), request)
 
     @PutMapping("/pin")
     fun updatePin(
@@ -99,18 +98,4 @@ class SmartPosSettingsController(
     }
 
     private fun currentCompanyId(): UUID = PosSecurityUtils.companyId()
-
-    private fun SmartPosSettings.toResponse(): SmartPosSettingsResponse =
-        SmartPosSettingsResponse(
-            saleOperationMode = saleOperationMode.name,
-            printType = print.name,
-            printLogo = printLogo,
-            logoConfigured = !logoUrl.isNullOrBlank(),
-            logoUrl = logoUrl,
-            securityEnabled = securityEnabled,
-            hasPin = !pinHash.isNullOrBlank(),
-            autoLogoutMinutes = autoLogoutMinutes,
-            darkMode = darkMode,
-            soundEnabled = soundEnabled
-        )
 }

@@ -34,6 +34,7 @@ import br.com.bipos.smartposapi.credential.PosDeviceRepository
 import br.com.bipos.smartposapi.domain.catalog.Sale
 import br.com.bipos.smartposapi.domain.company.Company
 import br.com.bipos.smartposapi.domain.company.CompanyStatus
+import br.com.bipos.smartposapi.domain.module.ModuleType
 import br.com.bipos.smartposapi.domain.settings.SmartPosPrint
 import br.com.bipos.smartposapi.domain.settings.SmartPosSaleOperationMode
 import br.com.bipos.smartposapi.domain.settings.SmartPosSettings
@@ -66,6 +67,8 @@ import br.com.bipos.smartposapi.security.SecurityConfig
 import br.com.bipos.smartposapi.settings.SmartPosSettingsController
 import br.com.bipos.smartposapi.settings.SmartPosSettingsRepository
 import br.com.bipos.smartposapi.settings.SmartPosSettingsService
+import br.com.bipos.smartposapi.settings.dto.SmartPosAvailableModuleResponse
+import br.com.bipos.smartposapi.settings.dto.SmartPosSettingsResponse
 import br.com.bipos.smartposapi.settings.dto.UpdateSmartPosSettingsRequest
 import br.com.bipos.smartposapi.stock.StockMovementRepository
 import br.com.bipos.smartposapi.stock.StockRepository
@@ -552,12 +555,12 @@ class PosApiWebLayerTest(
     fun `GET pos settings returns consolidated settings for authenticated company`() {
         stubValidPosToken()
         given(settingsService.getSettings(COMPANY_ID)).willReturn(
-            smartPosSettings(
+            smartPosSettingsResponse(
                 print = SmartPosPrint.SHORT,
                 printLogo = true,
                 logoUrl = "https://cdn.bipos.com/logo.png",
                 securityEnabled = true,
-                pinHash = "encoded-pin",
+                hasPin = true,
                 autoLogoutMinutes = 15,
                 darkMode = true,
                 soundEnabled = false
@@ -570,14 +573,18 @@ class PosApiWebLayerTest(
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.saleOperationMode").value(SmartPosSaleOperationMode.DIRECT.name))
+            .andExpect(jsonPath("$.print").value(SmartPosPrint.SHORT.name))
             .andExpect(jsonPath("$.printType").value(SmartPosPrint.SHORT.name))
             .andExpect(jsonPath("$.printLogo").value(true))
             .andExpect(jsonPath("$.logoConfigured").value(true))
             .andExpect(jsonPath("$.securityEnabled").value(true))
             .andExpect(jsonPath("$.hasPin").value(true))
+            .andExpect(jsonPath("$.pinAttempts").value(0))
             .andExpect(jsonPath("$.autoLogoutMinutes").value(15))
             .andExpect(jsonPath("$.darkMode").value(true))
             .andExpect(jsonPath("$.soundEnabled").value(false))
+            .andExpect(jsonPath("$.availableModules[0].moduleType").value(ModuleType.SALE.name))
+            .andExpect(jsonPath("$.version").value(1))
 
         verify(settingsService).getSettings(COMPANY_ID)
     }
@@ -588,7 +595,7 @@ class PosApiWebLayerTest(
 
         val request = UpdateSmartPosSettingsRequest(
             saleOperationMode = SmartPosSaleOperationMode.HYBRID.name,
-            printType = SmartPosPrint.SHORT.name,
+            print = SmartPosPrint.SHORT.name,
             printLogo = true,
             logoUrl = "https://cdn.bipos.com/logo.png",
             securityEnabled = true,
@@ -598,13 +605,13 @@ class PosApiWebLayerTest(
         )
 
         given(settingsService.updateSettings(COMPANY_ID, request)).willReturn(
-            smartPosSettings(
+            smartPosSettingsResponse(
                 saleOperationMode = SmartPosSaleOperationMode.HYBRID,
                 print = SmartPosPrint.SHORT,
                 printLogo = true,
                 logoUrl = "https://cdn.bipos.com/logo.png",
                 securityEnabled = true,
-                pinHash = "encoded-pin",
+                hasPin = true,
                 autoLogoutMinutes = 20,
                 darkMode = true,
                 soundEnabled = false
@@ -619,6 +626,7 @@ class PosApiWebLayerTest(
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.saleOperationMode").value(SmartPosSaleOperationMode.HYBRID.name))
+            .andExpect(jsonPath("$.print").value(SmartPosPrint.SHORT.name))
             .andExpect(jsonPath("$.printType").value(SmartPosPrint.SHORT.name))
             .andExpect(jsonPath("$.printLogo").value(true))
             .andExpect(jsonPath("$.securityEnabled").value(true))
@@ -914,6 +922,51 @@ class PosApiWebLayerTest(
         autoLogoutMinutes = autoLogoutMinutes,
         darkMode = darkMode,
         soundEnabled = soundEnabled
+    )
+
+    private fun smartPosSettingsResponse(
+        saleOperationMode: SmartPosSaleOperationMode = SmartPosSaleOperationMode.DIRECT,
+        print: SmartPosPrint = SmartPosPrint.FULL,
+        printLogo: Boolean = false,
+        logoUrl: String? = null,
+        securityEnabled: Boolean = false,
+        hasPin: Boolean = false,
+        autoLogoutMinutes: Int = 5,
+        darkMode: Boolean = false,
+        soundEnabled: Boolean = true,
+        pinAttempts: Int = 0,
+        version: Long = 1
+    ) = SmartPosSettingsResponse(
+        id = UUID.fromString("4d9a6330-8841-452b-bfc2-48179d58d7df"),
+        saleOperationMode = saleOperationMode.name,
+        print = print.name,
+        printType = print.name,
+        printLogo = printLogo,
+        logoConfigured = !logoUrl.isNullOrBlank(),
+        logoUrl = logoUrl,
+        securityEnabled = securityEnabled,
+        hasPin = hasPin,
+        lastPinChange = null,
+        pinAttempts = pinAttempts,
+        autoLogoutMinutes = autoLogoutMinutes,
+        darkMode = darkMode,
+        soundEnabled = soundEnabled,
+        availableModules = listOf(
+            SmartPosAvailableModuleResponse(
+                id = UUID.fromString("df9de251-94eb-46f7-87ff-fde1a5dcefe1"),
+                companyId = COMPANY_ID,
+                moduleId = UUID.fromString("54a8c28f-88cf-4b96-b7e6-385429c08e4a"),
+                moduleName = ModuleType.SALE.name,
+                moduleType = ModuleType.SALE.name,
+                enabled = true,
+                createdAt = null,
+                updatedAt = null,
+                activatedAt = null,
+                deactivatedAt = null
+            )
+        ),
+        version = version,
+        updatedAt = LocalDateTime.of(2026, 3, 23, 10, 0, 0)
     )
 
     private fun saleRequest() = SaleRequest(

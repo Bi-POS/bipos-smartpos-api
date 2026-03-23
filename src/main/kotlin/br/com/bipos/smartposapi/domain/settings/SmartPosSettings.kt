@@ -64,6 +64,13 @@ class SmartPosSettings(
     var isActive: Boolean = true
 ) {
 
+    fun updatePin(newPinHash: String) {
+        this.pinHash = newPinHash
+        this.lastPinChange = LocalDateTime.now()
+        this.pinAttempts = 0
+        this.updatedAt = LocalDateTime.now()
+    }
+
     fun validatePin(pin: String, passwordEncoder: PasswordEncoder): Boolean {
         if (!securityEnabled || pinHash == null) return true
 
@@ -88,5 +95,10 @@ class SmartPosSettings(
             pinAttempts++
         }
         updatedAt = LocalDateTime.now()
+    }
+
+    fun resetPinAttempts() {
+        this.pinAttempts = 0
+        this.updatedAt = LocalDateTime.now()
     }
 }

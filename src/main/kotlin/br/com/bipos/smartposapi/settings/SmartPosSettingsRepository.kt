@@ -13,6 +13,8 @@ interface SmartPosSettingsRepository : JpaRepository<SmartPosSettings, UUID> {
 
     fun findByCompanyId(companyId: UUID): Optional<SmartPosSettings>
 
+    fun findByCompanyIdAndIsActiveTrue(companyId: UUID): Optional<SmartPosSettings>
+
     @Modifying
     @Query("UPDATE SmartPosSettings s SET s.pinAttempts = s.pinAttempts + 1, s.updatedAt = CURRENT_TIMESTAMP WHERE s.companyId = :companyId")
     fun incrementPinAttempts(@Param("companyId") companyId: UUID)
